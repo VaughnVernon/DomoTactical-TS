@@ -13,6 +13,9 @@ import { Metadata } from '../../store/Metadata'
 import { Journal } from '../../store/journal/Journal'
 import { Result } from '../../store/Result'
 import { StorageException } from '../../store/StorageException'
+import { EntryAdapterProvider } from '../../store/EntryAdapterProvider'
+import { StateAdapterProvider } from '../../store/StateAdapterProvider'
+import { State } from '../../store/State'
 
 /**
  * Type for source consumer functions that apply sources to entities.
@@ -111,6 +114,14 @@ export abstract class SourcedEntity<T> extends EntityActor {
       throw new Error('Journal not set. Call setJournal() first.')
     }
     return this._journal
+  }
+
+  /**
+   * Automatically restore state from journal when actor starts.
+   * Override and call super.start() if additional initialization is needed.
+   */
+  override async start(): Promise<void> {
+    await this.restore()
   }
 
   /**
@@ -222,7 +233,7 @@ export abstract class SourcedEntity<T> extends EntityActor {
    * This is called automatically during actor initialization.
    */
   protected async restore(): Promise<void> {
-    if (!this.journal) {
+    if (!this._journal) {
       this.logger().error('Journal not set for SourcedEntity')
       return
     }
@@ -232,16 +243,36 @@ export abstract class SourcedEntity<T> extends EntityActor {
       const stream = await reader.streamFor(this.streamName)
 
       // Restore snapshot if available
-      if (stream.hasSnapshot()) {
-        await this.restoreSnapshot(stream.snapshot, this._currentVersion)
+      if (stream.snapshot) {
+        await this.restoreSnapshotInternal(stream.snapshot)
       }
 
       // Apply all entries to restore state
-      await this.restoreFrom(stream.entries.map(e => JSON.parse(e.entryData as string)), stream.streamVersion)
+      const provider = EntryAdapterProvider.getInstance()
+      const sources = provider.asSources(stream.entries)
+      await this.restoreFrom(sources, stream.streamVersion)
     } catch (error) {
       this.logger().error(`Stream not recovered for: ${this.type()}(${this.streamName})`, error)
       throw new StorageException(Result.Failure, `Stream recovery failed: ${error}`, error as Error)
     }
+  }
+
+  /**
+   * Internal helper to adapt raw State<unknown> to concrete SNAPSHOT type
+   * and call the protected restoreSnapshot() method.
+   * @param rawSnapshot the raw State from the journal
+   */
+  private async restoreSnapshotInternal(rawSnapshot: State<unknown>): Promise<void> {
+    if (!rawSnapshot || rawSnapshot.isEmpty()) {
+      return
+    }
+
+    // Use StateAdapterProvider to convert raw State → concrete snapshot type
+    const provider = StateAdapterProvider.getInstance()
+    const snapshot = provider.fromRawState(rawSnapshot, rawSnapshot.type)
+
+    // Call the protected overridable method with the concrete snapshot
+    await this.restoreSnapshot(snapshot, this._currentVersion)
   }
 
   /**
@@ -254,7 +285,7 @@ export abstract class SourcedEntity<T> extends EntityActor {
   ): Promise<void> {
     await this.beforeApply(sources)
 
-    if (!this.journal) {
+    if (!this._journal) {
       throw new Error('Journal not set for SourcedEntity')
     }
 
