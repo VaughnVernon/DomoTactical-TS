@@ -243,14 +243,22 @@ export abstract class SourcedEntity<T> extends EntityActor {
       const stream = await reader.streamFor(this.streamName)
 
       // Restore snapshot if available
+      let snapshotVersion = 0
       if (stream.snapshot) {
-        await this.restoreSnapshotInternal(stream.snapshot)
+        await this.restoreSnapshotInternal(stream.snapshot, stream.streamVersion)
+        snapshotVersion = this._currentVersion
       }
 
-      // Apply all entries to restore state
+      // Apply only entries AFTER the snapshot version
       const provider = EntryAdapterProvider.getInstance()
-      const sources = provider.asSources(stream.entries)
-      await this.restoreFrom(sources, stream.streamVersion)
+      const allSources = provider.asSources(stream.entries)
+
+      // Filter out events at or before snapshot version
+      const sourcesToApply = snapshotVersion > 0
+        ? allSources.slice(snapshotVersion) // Skip first N events already in snapshot
+        : allSources
+
+      await this.restoreFrom(sourcesToApply, stream.streamVersion)
     } catch (error) {
       this.logger().error(`Stream not recovered for: ${this.type()}(${this.streamName})`, error)
       throw new StorageException(Result.Failure, `Stream recovery failed: ${error}`, error as Error)
@@ -261,8 +269,9 @@ export abstract class SourcedEntity<T> extends EntityActor {
    * Internal helper to adapt raw State<unknown> to concrete SNAPSHOT type
    * and call the protected restoreSnapshot() method.
    * @param rawSnapshot the raw State from the journal
+   * @param streamVersion the version of the stream at which the snapshot was taken
    */
-  private async restoreSnapshotInternal(rawSnapshot: State<unknown>): Promise<void> {
+  private async restoreSnapshotInternal(rawSnapshot: State<unknown>, streamVersion: number): Promise<void> {
     if (!rawSnapshot || rawSnapshot.isEmpty()) {
       return
     }
@@ -271,8 +280,11 @@ export abstract class SourcedEntity<T> extends EntityActor {
     const provider = StateAdapterProvider.getInstance()
     const snapshot = provider.fromRawState(rawSnapshot, rawSnapshot.type)
 
-    // Call the protected overridable method with the concrete snapshot
-    await this.restoreSnapshot(snapshot, this._currentVersion)
+    // Call the protected overridable method with the stream version
+    await this.restoreSnapshot(snapshot, streamVersion)
+
+    // Set the current version after snapshot restoration
+    this._currentVersion = streamVersion
   }
 
   /**
