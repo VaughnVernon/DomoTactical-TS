@@ -216,12 +216,6 @@ export class BankActor extends EventSourcedEntity implements Bank {
     this.logger().log('Bank initialized with TransferCoordinator')
   }
 
-  protected async restore(): Promise<void> {
-    // Restore entity from journal
-    // In a real implementation, this would reload all bank events
-    // and reconstruct the state
-  }
-
   private generateAccountNumber(): string {
     const accountNumber = this.nextAccountNumber++
     return `ACC${accountNumber.toString().padStart(6, '0')}`

@@ -160,12 +160,6 @@ export class TransferCoordinatorActor extends EventSourcedEntity implements Tran
     return Array.from(this.pendingTransfers.values())
   }
 
-  protected async restore(): Promise<void> {
-    // Restore entity from journal
-    // In a real implementation, this would reload all transfer events
-    // and reconstruct the pending transfers map
-  }
-
   /**
    * Attempts to deposit to destination account (async operation).
    */

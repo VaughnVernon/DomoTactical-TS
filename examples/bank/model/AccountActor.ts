@@ -111,24 +111,4 @@ export class AccountActor extends EventSourcedEntity implements Account {
 
     return this.balance
   }
-
-  protected async restore(): Promise<void> {
-    // Restore entity from journal
-    const reader = await this.journal().streamReader(this.streamName)
-    const stream = await reader.readNext()
-
-    if (stream && stream.entries.length > 0) {
-      for (const entry of stream.entries) {
-        const event = JSON.parse(entry.entryData as string)
-        // Events will be applied through registered consumers
-        await this.applyEvent(event)
-      }
-    }
-  }
-
-  private async applyEvent(eventData: any): Promise<void> {
-    // Reconstruct event objects and apply them
-    // This would need proper event deserialization in a production system
-    // For now, this is a placeholder for the restore mechanism
-  }
 }
