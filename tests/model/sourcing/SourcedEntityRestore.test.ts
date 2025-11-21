@@ -15,6 +15,8 @@ import { Metadata } from '../../../src/store/Metadata'
 import { TextState } from '../../../src/store/State'
 import { EntryAdapterProvider } from '../../../src/store/EntryAdapterProvider'
 import { DefaultTextEntryAdapter } from '../../../src/store/DefaultTextEntryAdapter'
+import { StateAdapterProvider } from '../../../src/store/StateAdapterProvider'
+import { DefaultTextStateAdapter } from '../../../src/store/DefaultTextStateAdapter'
 
 /**
  * Simple supervisor for test entities.
@@ -103,6 +105,26 @@ class AccountClosedAdapter extends DefaultTextEntryAdapter<AccountClosed> {
 }
 
 /**
+ * Snapshot type for TestAccount.
+ */
+interface TestAccountSnapshot {
+  accountId: string
+  owner: string
+  balance: number
+  isOpen: boolean
+  adjustmentCount: number
+}
+
+/**
+ * StateAdapter for TestAccountSnapshot.
+ */
+class TestAccountSnapshotAdapter extends DefaultTextStateAdapter<TestAccountSnapshot> {
+  protected override fromRawState(raw: TextState): TestAccountSnapshot {
+    return JSON.parse(raw.data) as TestAccountSnapshot
+  }
+}
+
+/**
  * Test entity for restoration tests.
  */
 class TestAccount extends EventSourcedEntity {
@@ -129,6 +151,22 @@ class TestAccount extends EventSourcedEntity {
     EventSourcedEntity.registerConsumer(TestAccount, AccountClosed, (account, event) => {
       account.isOpen = false
     })
+  }
+
+  /**
+   * Override to support snapshot restoration.
+   * Note: The base class automatically sets currentVersion after this method returns.
+   * Concrete implementations should only restore domain state.
+   */
+  protected override async restoreSnapshot(
+    snapshot: TestAccountSnapshot,
+    currentVersion: number
+  ): Promise<void> {
+    this.accountId = snapshot.accountId
+    this.owner = snapshot.owner
+    this.balance = snapshot.balance
+    this.isOpen = snapshot.isOpen
+    this.adjustmentCount = snapshot.adjustmentCount
   }
 
   constructor(accountId?: string) {
@@ -182,14 +220,19 @@ describe('SourcedEntity Restoration', () => {
   let journal: InMemoryJournal<string>
 
   beforeEach(async () => {
-    // Reset entry adapter provider
+    // Reset adapter providers
     EntryAdapterProvider.reset()
+    StateAdapterProvider.reset()
 
     // Register custom adapters for test events
-    const provider = EntryAdapterProvider.getInstance()
-    provider.registerAdapter(AccountCreated, new AccountCreatedAdapter())
-    provider.registerAdapter(BalanceAdjusted, new BalanceAdjustedAdapter())
-    provider.registerAdapter(AccountClosed, new AccountClosedAdapter())
+    const entryProvider = EntryAdapterProvider.getInstance()
+    entryProvider.registerAdapter(AccountCreated, new AccountCreatedAdapter())
+    entryProvider.registerAdapter(BalanceAdjusted, new BalanceAdjustedAdapter())
+    entryProvider.registerAdapter(AccountClosed, new AccountClosedAdapter())
+
+    // Register state adapter for snapshots
+    const stateProvider = StateAdapterProvider.getInstance()
+    stateProvider.registerAdapter('Object', new TestAccountSnapshotAdapter())
 
     // Initialize supervisor
     const supervisorProtocol: Protocol = {
@@ -324,7 +367,9 @@ describe('SourcedEntity Restoration', () => {
       Metadata.nullMetadata()
     )
 
-    // Append event with snapshot
+    // Append event with snapshot at version 2
+    // The snapshot represents state AFTER both events (version 1 and 2)
+    // So balance=1500 (1000 + 500) and adjustmentCount=1 (one BalanceAdjusted event)
     const snapshot = new TextState(
       'account-003',
       Object,
@@ -334,9 +379,9 @@ describe('SourcedEntity Restoration', () => {
         owner: 'Charlie',
         balance: 1500,
         isOpen: true,
-        adjustmentCount: 5
+        adjustmentCount: 1  // Changed from 5 to 1 - reflects one adjustment
       }),
-      2,
+      2,  // Snapshot dataVersion
       Metadata.nullMetadata()
     )
 
@@ -370,11 +415,13 @@ describe('SourcedEntity Restoration', () => {
     // Wait briefly for actor to start and restore automatically
     await new Promise(resolve => setTimeout(resolve, 50))
 
-    // Verify state was restored from events
-    // Note: Current implementation doesn't support snapshot restoration
-    // so we verify all events were applied
+    // Verify state was restored from SNAPSHOT (not by replaying events)
+    // The snapshot at version 2 has balance=1500 and adjustmentCount=1
+    // No events should be applied after the snapshot since it's at version 2
     expect(await account.getAccountId()).toBe('account-003')
     expect(await account.getOwner()).toBe('Charlie')
+    expect(await account.getBalance()).toBe(1500) // From snapshot (1000 + 500)
+    expect(await account.getAdjustmentCount()).toBe(1) // From snapshot, NOT from replaying events!
     expect(await account.getCurrentVersion()).toBe(2)
   })
 
