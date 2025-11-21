@@ -1,0 +1,15 @@
+src/
+tests/
+.git/
+.gitignore
+.claude/
+tsconfig.json
+tsconfig.build.json
+tsconfig.test.json
+vitest.config.ts
+typedoc.json
+*.test.ts
+*.spec.ts
+coverage/
+node_modules/
+.DS_Store

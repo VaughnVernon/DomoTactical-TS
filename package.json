@@ -1,0 +1,100 @@
+{
+  "name": "domo-tactical",
+  "version": "0.1.0",
+  "description": "DDD Tactical patterns for TypeScript - Event Sourcing, Command Sourcing, and Domain Modeling",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./model": {
+      "import": "./dist/model/index.js",
+      "types": "./dist/model/index.d.ts"
+    },
+    "./model/sourcing": {
+      "import": "./dist/model/sourcing/index.js",
+      "types": "./dist/model/sourcing/index.d.ts"
+    },
+    "./model/projections": {
+      "import": "./dist/model/projections/index.js",
+      "types": "./dist/model/projections/index.d.ts"
+    },
+    "./store": {
+      "import": "./dist/store/index.js",
+      "types": "./dist/store/index.d.ts"
+    },
+    "./store/journal": {
+      "import": "./dist/store/journal/index.js",
+      "types": "./dist/store/journal/index.d.ts"
+    },
+    "./store/document": {
+      "import": "./dist/store/document/index.js",
+      "types": "./dist/store/document/index.d.ts"
+    },
+    "./testkit": {
+      "import": "./dist/testkit/index.js",
+      "types": "./dist/testkit/index.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "postbuild": "npm link",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "example:bank": "tsx examples/bank/bank.ts",
+    "clean": "rm -rf dist",
+    "docs": "typedoc",
+    "docs:serve": "npx http-server docs/api -o",
+    "prepublishOnly": "npm run clean && npm run build && npm test",
+    "preversion": "npm test",
+    "postversion": "git push && git push --tags"
+  },
+  "keywords": [
+    "ddd",
+    "domain-driven-design",
+    "event-sourcing",
+    "command-sourcing",
+    "cqrs",
+    "tactical-design",
+    "entity",
+    "aggregate",
+    "domain-event",
+    "command",
+    "typescript",
+    "actor-model",
+    "domo-actors"
+  ],
+  "author": "Vaughn Vernon",
+  "license": "RPL-1.5",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/VaughnVernon/DomoTactical-TS.git"
+  },
+  "bugs": {
+    "url": "https://github.com/VaughnVernon/DomoTactical-TS/issues"
+  },
+  "homepage": "https://github.com/VaughnVernon/DomoTactical-TS#readme",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.9.1",
+    "@vitest/coverage-v8": "^4.0.13",
+    "tsx": "^4.20.6",
+    "typedoc": "^0.28.14",
+    "typescript": "^5.7.2",
+    "vitest": "^4.0.13"
+  },
+  "dependencies": {
+    "domo-actors": "^1.1.0"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "entryPoints": ["src/index.ts"],
+  "out": "docs/api",
+  "plugin": [],
+  "excludePrivate": true,
+  "excludeProtected": false,
+  "excludeExternals": true,
+  "readme": "README.md",
+  "categorizeByGroup": true,
+  "defaultCategory": "Other",
+  "categoryOrder": ["Model", "Store", "Sourcing", "*"],
+  "gitRevision": "main"
+}
