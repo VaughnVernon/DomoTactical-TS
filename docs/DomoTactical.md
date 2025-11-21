@@ -1,6 +1,6 @@
 # DomoTactical-TS Documentation ✅
 
-**DomoTactical-TS** is a comprehensive TypeScript implementation of Domain-Driven Design (DDD) tactical patterns based on the VLINGO/XOOM Lattice library. It provides a complete CQRS/Event Sourcing framework built on the DomoActors actor model, with production-ready abstractions and in-memory implementations for rapid development.
+**DomoTactical-TS** is a comprehensive TypeScript implementation of Domain-Driven Design (DDD) tactical patterns based on the VLINGO/XOOM Lattice library. It provides DDD-friendly tactical modeling tools and CQRS/Event Sourcing abstractions built on the DomoActors actor model.
 
 ## Project Overview
 
@@ -1263,7 +1263,6 @@ npm publish        # Publish to npm
 
 ## Dependencies
 
-### Production
 - **domo-actors@^1.0.2** - Actor model foundation
 
 ### Development
