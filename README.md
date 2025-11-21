@@ -11,7 +11,7 @@ Domo tactical domain modeling tools for TypeScript using DomoActors-TS.
 
 ## Overview
 
-DomoTactical-TS is a comprehensive Domain-Driven Design (DDD) tactical patterns library for TypeScript, built on the DomoActors actor model. It provides production-ready implementations of:
+DomoTactical-TS is a comprehensive Domain-Driven Design (DDD) tactical patterns library for TypeScript, built on the DomoActors actor model. It provides DDD-friendly implementations of:
 
 - **Event Sourcing** - Persist and restore entity state from domain events
 - **Command Sourcing** - Alternative sourcing using commands instead of events
