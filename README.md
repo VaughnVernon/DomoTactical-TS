@@ -101,6 +101,7 @@ console.log(account.getBalance())  // 1500
 
 - [Complete Documentation](./docs/DomoTactical.md) - Full guide with examples
 - [API Reference](./docs/api/index.html) - Generated TypeDoc API documentation
+  - Currently not committed to git; use `npm run docs` to generate
 - [Bank Example](./examples/bank/bank.ts) - Complete working example with projections
 
 ## Contributing
