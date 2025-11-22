@@ -3,7 +3,7 @@ Domo tactical domain modeling tools for TypeScript using DomoActors-TS.
 
 [![License: RPL-1.5](https://img.shields.io/badge/License-RPL--1.5-blue.svg)](https://opensource.org/license/rpl-1-5)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7-blue.svg)](https://www.typescriptlang.org/)
-[![npm version](https://img.shields.io/npm/v/domo-actors.svg)](https://www.npmjs.com/package/domo-actors)
+[![npm version](https://img.shields.io/npm/v/domo-tactical.svg)](https://www.npmjs.com/package/domo-tactical)
 [![V8](https://img.shields.io/badge/V8-Compatible-orange.svg)](https://v8.dev/)
 [![Runtimes](https://img.shields.io/badge/Runtimes-Browser%20%7C%20Node.js%20%7C%20Cloudflare%20%7C%20Deno%20%7C%20Bun-blue.svg)](https://github.com/VaughnVernon/DomoTactical-TS#requirements)
 [![npm downloads](https://img.shields.io/npm/dt/domo-tactical.svg)](https://www.npmjs.com/package/domo-tactical)
