@@ -135,7 +135,7 @@ export class AccountSummaryProjectionActor extends Actor implements Projection {
       owner: event.owner,
       accountType: event.accountType || 'checking',
       balance: event.initialBalance || 0,
-      transactionCount: 0,
+      transactionCount: 1,  // Opening counts as a transaction
       lastTransactionAt: event.openedAt.toISOString(),
       createdAt: event.openedAt.toISOString(),
       updatedAt: new Date().toISOString()
