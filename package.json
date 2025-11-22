@@ -1,6 +1,6 @@
 {
   "name": "domo-tactical",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "DDD Tactical patterns for TypeScript - Event Sourcing, Command Sourcing, and Domain Modeling",
   "author": "Vaughn Vernon",
   "license": "RPL-1.5",
