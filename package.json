@@ -2,6 +2,8 @@
   "name": "domo-tactical",
   "version": "0.1.0",
   "description": "DDD Tactical patterns for TypeScript - Event Sourcing, Command Sourcing, and Domain Modeling",
+  "author": "Vaughn Vernon",
+  "license": "RPL-1.5",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -73,8 +75,6 @@
     "actor-model",
     "domo-actors"
   ],
-  "author": "Vaughn Vernon",
-  "license": "RPL-1.5",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/VaughnVernon/DomoTactical-TS.git"
