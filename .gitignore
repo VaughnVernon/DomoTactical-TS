@@ -5,6 +5,9 @@ dist/
 # Dependencies
 node_modules/
 
+# API Docs (typedoc)
+docs/api/
+
 # Test coverage
 coverage/
 .nyc_output/
