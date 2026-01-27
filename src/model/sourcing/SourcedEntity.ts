@@ -47,6 +47,21 @@ export abstract class SourcedEntity<T> extends EntityActor {
   private _journal: Journal<string> | null = null
 
   /**
+   * Answer the bounded context name for this entity.
+   * Default returns 'default'. Override to specify your bounded context.
+   */
+  protected contextName(): string {
+    return 'default'
+  }
+
+  /**
+   * Answer the journal registration key for this bounded context.
+   */
+  protected journalKey(): string {
+    return `domo-tactical:${this.contextName()}.journal`
+  }
+
+  /**
    * Register the means to apply sourceType instances for state transition
    * of sourcedType by means of a given consumer.
    * @param sourcedType the concrete class type to which sourceType instances are applied
@@ -88,7 +103,7 @@ export abstract class SourcedEntity<T> extends EntityActor {
 
     // Automatically retrieve journal from Stage if registered
     try {
-      this._journal = this.stage().registeredValue<Journal<string>>('domo-tactical:bank.journal')
+      this._journal = this.stage().registeredValue<Journal<string>>(this.journalKey())
     } catch (error) {
       // Journal not registered on Stage yet, will be set manually via setJournal()
     }
