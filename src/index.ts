@@ -18,7 +18,7 @@ export {
   StorageException,
 } from './store'
 
-export type { Journal, StreamReader, Entry, JournalConsumer } from './store/journal'
+export type { Journal, StreamReader, JournalReader, Entry, JournalConsumer } from './store/journal'
 export {
   AppendResult,
   EntryStream,
@@ -54,6 +54,8 @@ export {
   SourcedEntity,
   EventSourcedEntity,
   CommandSourcedEntity,
+  eventSourcedEntityTypeFor,
+  commandSourcedEntityTypeFor,
 } from './model/sourcing'
 
 // Projection exports
