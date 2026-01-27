@@ -6,11 +6,14 @@
 // See: LICENSE.md in repository root directory
 // See: https://opensource.org/license/rpl-1-5
 
+import { ActorProtocol } from 'domo-actors'
 import { Projectable } from './Projectable'
 import { ProjectToDescription } from './ProjectToDescription'
 
 /**
  * Dispatches Projectables to matching Projections.
+ *
+ * ProjectionDispatcher extends ActorProtocol, meaning implementations must be Actors.
  *
  * The ProjectionDispatcher is the central hub in the CQRS projection pipeline:
  * 1. Receives Projectables (events/state) from a journal consumer
@@ -67,7 +70,7 @@ import { ProjectToDescription } from './ProjectToDescription'
  * await dispatcher.dispatch(projectable)
  * ```
  */
-export interface ProjectionDispatcher {
+export interface ProjectionDispatcher extends ActorProtocol {
   /**
    * Dispatch projectable to all matching projections.
    *

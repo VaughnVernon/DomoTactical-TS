@@ -6,6 +6,7 @@
 // See: LICENSE.md in repository root directory
 // See: https://opensource.org/license/rpl-1-5
 
+import { ActorProtocol } from 'domo-actors'
 import { Projectable } from './Projectable'
 import { ProjectionControl } from './ProjectionControl'
 
@@ -15,12 +16,14 @@ import { ProjectionControl } from './ProjectionControl'
  * A Projection receives Projectables (events/state) and projects them to query model views.
  * This is the core abstraction for CQRS read-side projections.
  *
+ * Projection extends ActorProtocol, meaning implementations must be Actors.
+ *
  * Projections typically:
  * 1. Extract data from the Projectable
  * 2. Update a query model view (e.g., in a DocumentStore)
  * 3. Confirm projection via ProjectionControl
  *
- * Projections are typically implemented as Actors to leverage:
+ * Being Actors, Projections leverage:
  * - Asynchronous processing
  * - Mailbox-based message ordering
  * - Supervision and fault tolerance
@@ -56,7 +59,7 @@ import { ProjectionControl } from './ProjectionControl'
  * }
  * ```
  */
-export interface Projection {
+export interface Projection extends ActorProtocol {
   /**
    * Project the given Projectable to a query model view.
    *
