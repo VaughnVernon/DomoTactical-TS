@@ -12,6 +12,7 @@ import { Account, AccountType, Bank, PendingTransfer, TransferCoordinator, Trans
 import { BankAccountOpened, BankAccountFrozen, BankAccountClosed } from './BankEvents'
 import { AccountActor } from './AccountActor'
 import { TransferCoordinatorActor } from './TransferCoordinatorActor'
+import { BankEventSourcedEntity } from './BankEntity'
 
 /**
  * Event-sourced bank actor implementation.
@@ -22,7 +23,7 @@ import { TransferCoordinatorActor } from './TransferCoordinatorActor'
  * - Routes operations to appropriate child actors
  * - Uses EventSourcedEntity for bank-level events
  */
-export class BankActor extends EventSourcedEntity implements Bank {
+export class BankActor extends BankEventSourcedEntity implements Bank {
   private readonly bankId: string = 'bank-001'
   private accounts = new Map<string, Account>()
   private transferCoordinator!: TransferCoordinator

@@ -9,6 +9,7 @@
 import { EventSourcedEntity } from 'domo-tactical/model/sourcing'
 import { Account, AccountType, AccountInfo } from './BankTypes'
 import { AccountOpened, FundsDeposited, FundsWithdrawn, FundsRefunded } from './AccountEvents'
+import { BankEventSourcedEntity } from './BankEntity'
 
 /**
  * Event-sourced bank account actor implementation.
@@ -17,7 +18,7 @@ import { AccountOpened, FundsDeposited, FundsWithdrawn, FundsRefunded } from './
  * All state changes are persisted as events in the Journal.
  * Read models (projections) are built asynchronously from the event stream.
  */
-export class AccountActor extends EventSourcedEntity implements Account {
+export class AccountActor extends BankEventSourcedEntity implements Account {
   private balance: number = 0
   private accountNumber: string = ''
   private owner: string = ''

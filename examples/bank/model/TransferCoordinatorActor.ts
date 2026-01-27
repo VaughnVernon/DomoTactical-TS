@@ -16,6 +16,7 @@ import {
   TransferCompleted,
   TransferRefunded
 } from './TransferEvents'
+import { BankEventSourcedEntity } from './BankEntity'
 
 /**
  * Event-sourced transfer coordinator actor.
@@ -27,7 +28,7 @@ import {
  * 4. Retry on failure with exponential backoff
  * 5. Refund to source if max retries exceeded via TransferRefunded event
  */
-export class TransferCoordinatorActor extends EventSourcedEntity implements TransferCoordinator {
+export class TransferCoordinatorActor extends BankEventSourcedEntity implements TransferCoordinator {
   private readonly coordinatorId: string
   private accounts = new Map<string, Account>()
   private pendingTransfers = new Map<string, PendingTransfer>()

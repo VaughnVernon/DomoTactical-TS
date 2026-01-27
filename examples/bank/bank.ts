@@ -10,6 +10,7 @@ import * as readline from 'readline'
 import { stage, Protocol, Definition } from 'domo-actors'
 import { InMemoryJournal } from 'domo-tactical/store/journal'
 import { InMemoryDocumentStore } from 'domo-tactical/store/document'
+import { Journal, DocumentStore } from 'domo-tactical'
 import { Bank, Teller, RequestType } from './model/BankTypes'
 import { BankActor } from './model/BankActor'
 import { TellerActor } from './model/TellerActor'
@@ -70,8 +71,8 @@ let teller: Teller
  * Infrastructure that needs cleanup
  */
 interface BankInfrastructure {
-  journal: InMemoryJournal<string>
-  documentStore: InMemoryDocumentStore
+  journal: Journal<string>
+  documentStore: DocumentStore
   consumer: JournalConsumer
 }
 
@@ -278,18 +279,26 @@ async function bankStatistics(): Promise<void> {
  * Registers them on the Stage for actor access.
  */
 function setupPersistenceInfrastructure(): {
-  journal: InMemoryJournal<string>
-  documentStore: InMemoryDocumentStore
+  journal: Journal<string>
+  documentStore: DocumentStore
 } {
   console.log('\n🏦 Starting DomoTactical-TS Bank Example...\n')
 
-  // Create shared journal for all event-sourced entities
-  const journal = new InMemoryJournal<string>()
+  // Create shared journal for all event-sourced entities as an actor
+  const journalProtocol: Protocol = {
+    type: () => 'Journal',
+    instantiator: () => ({ instantiate: () => new InMemoryJournal<string>() })
+  }
+  const journal = stage().actorFor<Journal<string>>(journalProtocol, undefined, 'default')
   stage().registerValue('domo-tactical:bank.journal', journal)
   console.log('✅ Created shared InMemoryJournal for event sourcing')
 
-  // Create shared document store for documents and read models
-  const documentStore = new InMemoryDocumentStore()
+  // Create shared document store for documents and read models as an actor
+  const storeProtocol: Protocol = {
+    type: () => 'DocumentStore',
+    instantiator: () => ({ instantiate: () => new InMemoryDocumentStore() })
+  }
+  const documentStore = stage().actorFor<DocumentStore>(storeProtocol, undefined, 'default')
   stage().registerValue('domo-tactical:bank.documentStore', documentStore)
   console.log('✅ Created shared InMemoryDocumentStore for documents and read models')
 
@@ -456,7 +465,7 @@ function registerProjections(
 /**
  * Setup the complete CQRS pipeline: Journal → Consumer → Dispatcher → Projections → DocumentStore
  */
-async function setupCQRSPipeline(journal: InMemoryJournal<string>): Promise<JournalConsumer> {
+async function setupCQRSPipeline(journal: Journal<string>): Promise<JournalConsumer> {
   // Create projection supervisor
   const projectionSupervisorProtocol: Protocol = {
     type: () => 'projection-supervisor',
