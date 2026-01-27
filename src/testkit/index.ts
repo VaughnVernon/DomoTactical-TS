@@ -18,6 +18,7 @@
  */
 
 export { TestConfirmer } from './TestConfirmer'
+export { TestJournalSupervisor, type TestSupervisor } from './TestJournalSupervisor'
 
 // Convenient aliases for test utilities
 export { InMemoryJournal as TestJournal } from '../store/journal/inmemory/InMemoryJournal'
