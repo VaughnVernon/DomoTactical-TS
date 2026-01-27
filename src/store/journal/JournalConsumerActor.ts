@@ -6,12 +6,40 @@
 // See: LICENSE.md in repository root directory
 // See: https://opensource.org/license/rpl-1-5
 
-import { Actor } from 'domo-actors'
+import { Actor, ActorProtocol } from 'domo-actors'
 import { JournalReader } from './JournalReader'
 import { Entry } from './Entry'
 import { ProjectionDispatcher } from '../../model/projections/ProjectionDispatcher'
 import { Projectable } from '../../model/projections/Projectable'
 import { TextProjectable } from '../../model/projections/Projectable'
+
+
+/**
+ * Protocol interface for JournalConsumer messages.
+ * Defines the public API for controlling the journal consumer.
+ * Extends ActorProtocol, meaning implementations must be Actors.
+ */
+export interface JournalConsumer extends ActorProtocol {
+  /**
+   * Pause journal consumption.
+   * The consumer will stop polling until resumed.
+   */
+  pause(): Promise<void>
+
+  /**
+   * Resume journal consumption.
+   * The consumer will start polling again.
+   */
+  resume(): Promise<void>
+
+  /**
+   * Check if consumer is actively polling.
+   *
+   * @returns Promise<boolean> true if consumer is running
+   */
+  isActive(): Promise<boolean>
+}
+
 
 /**
  * Actor that periodically reads from a Journal and dispatches entries to projections.
@@ -218,29 +246,4 @@ export class JournalConsumerActor extends Actor {
   async isActive(): Promise<boolean> {
     return this.isRunning
   }
-}
-
-/**
- * Protocol interface for JournalConsumer messages.
- * Defines the public API for controlling the journal consumer.
- */
-export interface JournalConsumer {
-  /**
-   * Pause journal consumption.
-   * The consumer will stop polling until resumed.
-   */
-  pause(): Promise<void>
-
-  /**
-   * Resume journal consumption.
-   * The consumer will start polling again.
-   */
-  resume(): Promise<void>
-
-  /**
-   * Check if consumer is actively polling.
-   *
-   * @returns Promise<boolean> true if consumer is running
-   */
-  isActive(): Promise<boolean>
 }

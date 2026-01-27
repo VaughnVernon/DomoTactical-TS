@@ -6,6 +6,7 @@
 // See: LICENSE.md in repository root directory
 // See: https://opensource.org/license/rpl-1-5
 
+import { Actor, Protocol, Definition } from 'domo-actors'
 import { Metadata } from '../../Metadata'
 import { Result } from '../../Result'
 import { Source } from '../../Source'
@@ -20,11 +21,12 @@ import { EntryAdapterProvider } from '../../EntryAdapterProvider'
 
 /**
  * In-memory implementation of Journal using Map-based storage.
+ * Extends Actor for use with the actor model.
  * Stores entries as JSON strings for simplicity.
  *
  * @template T the type of entry data (typically string for JSON)
  */
-export class InMemoryJournal<T> implements Journal<T> {
+export class InMemoryJournal<T> extends Actor implements Journal<T> {
   /** All journal entries in order */
   private readonly journal: Entry<T>[] = []
 
@@ -49,7 +51,9 @@ export class InMemoryJournal<T> implements Journal<T> {
   /**
    * Construct an InMemoryJournal.
    */
-  constructor() {}
+  constructor() {
+    super()
+  }
 
   /**
    * Append a single Source as an Entry to the journal.
@@ -151,11 +155,31 @@ export class InMemoryJournal<T> implements Journal<T> {
 
   /**
    * Get a stream reader for reading entity event streams.
+   * Creates the reader as an actor under this journal's supervisor.
    */
   async streamReader(name: string): Promise<StreamReader<T>> {
     let reader = this.streamReaders.get(name)
     if (!reader) {
-      reader = new InMemoryStreamReader(this.journal, this.streamIndexes, this.snapshots, name)
+      const readerProtocol: Protocol = {
+        type: () => 'StreamReader',
+        instantiator: () => ({
+          instantiate: (def: Definition) => {
+            const [journalEntries, indexes, snaps, readerName] = def.parameters()
+            return new InMemoryStreamReader(journalEntries, indexes, snaps, readerName)
+          }
+        })
+      }
+
+      reader = this.stage().actorFor<InMemoryStreamReader<T>>(
+        readerProtocol,
+        undefined,
+        this.supervisorName(),
+        undefined,
+        this.journal,
+        this.streamIndexes,
+        this.snapshots,
+        name
+      )
       this.streamReaders.set(name, reader)
     }
     return reader
@@ -163,14 +187,39 @@ export class InMemoryJournal<T> implements Journal<T> {
 
   /**
    * Get a journal reader for sequential access to all entries.
+   * Creates the reader as an actor under this journal's supervisor.
    */
   async journalReader(name: string): Promise<JournalReader<T>> {
     let reader = this.journalReaders.get(name)
     if (!reader) {
-      reader = new InMemoryJournalReader(this.journal, name)
+      const readerProtocol: Protocol = {
+        type: () => 'JournalReader',
+        instantiator: () => ({
+          instantiate: (def: Definition) => {
+            const [journalEntries, readerName] = def.parameters()
+            return new InMemoryJournalReader(journalEntries, readerName)
+          }
+        })
+      }
+
+      reader = this.stage().actorFor<InMemoryJournalReader<T>>(
+        readerProtocol,
+        undefined,
+        this.supervisorName(),
+        undefined,
+        this.journal,
+        name
+      )
       this.journalReaders.set(name, reader)
     }
     return reader
+  }
+
+  /**
+   * Answer this actor's supervisor name, so child actors can use the same supervisor.
+   */
+  private supervisorName(): string {
+    return this.environment().supervisorName()
   }
 
   /**
@@ -207,14 +256,26 @@ export class InMemoryJournal<T> implements Journal<T> {
 
 /**
  * In-memory implementation of StreamReader.
+ * Extends Actor for compatibility with the Journal actor model.
  */
-class InMemoryStreamReader<T> implements StreamReader<T> {
+class InMemoryStreamReader<T> extends Actor implements StreamReader<T> {
+  private readonly journalEntries: Entry<T>[]
+  private readonly streamIndexes: Map<string, Map<number, number>>
+  private readonly snapshotStore: Map<string, State<unknown>>
+  private readonly readerName: string
+
   constructor(
-    private readonly journal: Entry<T>[],
-    private readonly streamIndexes: Map<string, Map<number, number>>,
-    private readonly snapshots: Map<string, State<unknown>>,
-    private readonly name: string
-  ) {}
+    journal: Entry<T>[],
+    streamIndexes: Map<string, Map<number, number>>,
+    snapshots: Map<string, State<unknown>>,
+    name: string
+  ) {
+    super()
+    this.journalEntries = journal
+    this.streamIndexes = streamIndexes
+    this.snapshotStore = snapshots
+    this.readerName = name
+  }
 
   /**
    * Read the stream for the given stream name.
@@ -231,7 +292,7 @@ class InMemoryStreamReader<T> implements StreamReader<T> {
     let maxVersion = 0
 
     for (const [version, index] of versionIndexes.entries()) {
-      entries.push(this.journal[index])
+      entries.push(this.journalEntries[index])
       maxVersion = Math.max(maxVersion, version)
     }
 
@@ -242,7 +303,7 @@ class InMemoryStreamReader<T> implements StreamReader<T> {
       return aId - bId
     })
 
-    const snapshot = this.snapshots.get(streamName) || null
+    const snapshot = this.snapshotStore.get(streamName) || null
 
     return new EntryStream(streamName, maxVersion, entries, snapshot)
   }

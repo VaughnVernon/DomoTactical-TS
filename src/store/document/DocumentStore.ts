@@ -6,6 +6,7 @@
 // See: LICENSE.md in repository root directory
 // See: https://opensource.org/license/rpl-1-5
 
+import { ActorProtocol } from 'domo-actors'
 import { Source } from '../Source'
 import { Metadata } from '../Metadata'
 import { State } from '../State'
@@ -106,7 +107,7 @@ export interface WriteResult<S = any, C = any> {
  * }
  * ```
  */
-export interface DocumentStore {
+export interface DocumentStore extends ActorProtocol {
   /**
    * Read a single document by id and type.
    *

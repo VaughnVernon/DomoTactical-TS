@@ -6,6 +6,7 @@
 // See: LICENSE.md in repository root directory
 // See: https://opensource.org/license/rpl-1-5
 
+import { ActorProtocol } from 'domo-actors'
 import { Metadata } from '../Metadata'
 import { Result } from '../Result'
 import { Source } from '../Source'
@@ -72,9 +73,14 @@ export class AppendResult<S, ST> {
 
 /**
  * Stream reader for reading entity event streams.
+ *
+ * StreamReader extends ActorProtocol, meaning implementations must be Actors.
+ * This ensures compatibility with the Journal actor that creates and owns
+ * the StreamReader instances.
+ *
  * @template T the type of entry data
  */
-export interface StreamReader<T> {
+export interface StreamReader<T> extends ActorProtocol {
   /**
    * Read the stream for the given stream name.
    * @param streamName the name of the stream to read
@@ -89,9 +95,11 @@ export interface StreamReader<T> {
  *
  * Each use of the journal appends some number of Entry instances and perhaps a single snapshot State.
  *
+ * Journal extends ActorProtocol, meaning implementations must be Actors.
+ *
  * @template T the concrete type of Entry stored (typically string for JSON)
  */
-export interface Journal<T> {
+export interface Journal<T> extends ActorProtocol {
   /**
    * Append a single Source as an Entry to the journal.
    * @param streamName the name of the stream to append

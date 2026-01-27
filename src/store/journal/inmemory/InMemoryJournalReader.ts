@@ -6,11 +6,13 @@
 // See: LICENSE.md in repository root directory
 // See: https://opensource.org/license/rpl-1-5
 
+import { Actor } from 'domo-actors'
 import { Entry } from '../Entry'
 import { JournalReader } from '../JournalReader'
 
 /**
  * In-memory implementation of JournalReader.
+ * Extends Actor for use with the actor model.
  *
  * Maintains a position pointer into the shared journal entry list.
  * Multiple readers can exist simultaneously, each with independent positions.
@@ -18,14 +20,20 @@ import { JournalReader } from '../JournalReader'
  * This implementation:
  * - Reads from a shared journal array (all entries across all streams)
  * - Maintains its own position pointer
- * - Is thread-safe for single-process use
+ * - Is thread-safe for single-process use (JavaScript is single-threaded)
  * - Position is volatile (resets on restart)
  *
  * @template T the type of entry data (typically string for JSON)
  */
-export class InMemoryJournalReader<T> implements JournalReader<T> {
+export class InMemoryJournalReader<T> extends Actor implements JournalReader<T> {
   /** Current reading position (0-based index) */
   private currentPosition: number = 0
+
+  /** Reference to the shared journal entries */
+  private readonly journal: Entry<T>[]
+
+  /** The name of this reader */
+  private readonly readerName: string
 
   /**
    * Construct an InMemoryJournalReader.
@@ -33,10 +41,11 @@ export class InMemoryJournalReader<T> implements JournalReader<T> {
    * @param journal reference to the shared journal entries
    * @param readerName the name of this reader
    */
-  constructor(
-    private readonly journal: Entry<T>[],
-    private readonly readerName: string
-  ) {}
+  constructor(journal: Entry<T>[], readerName: string) {
+    super()
+    this.journal = journal
+    this.readerName = readerName
+  }
 
   /**
    * Read the next available entries up to the maximum count.
@@ -65,9 +74,9 @@ export class InMemoryJournalReader<T> implements JournalReader<T> {
   /**
    * Answer the name of this reader.
    *
-   * @returns string the reader name
+   * @returns Promise<string> the reader name
    */
-  name(): string {
+  async name(): Promise<string> {
     return this.readerName
   }
 
@@ -89,9 +98,9 @@ export class InMemoryJournalReader<T> implements JournalReader<T> {
   /**
    * Answer the current reading position.
    *
-   * @returns number the current position (0-based)
+   * @returns Promise<number> the current position (0-based)
    */
-  position(): number {
+  async position(): Promise<number> {
     return this.currentPosition
   }
 

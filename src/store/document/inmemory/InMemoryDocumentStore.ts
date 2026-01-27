@@ -1,11 +1,12 @@
-// Copyright � 2012-2025 Vaughn Vernon. All rights reserved.
-// Copyright � 2012-2025 Kalele, Inc. All rights reserved.
+// Copyright © 2012-2025 Vaughn Vernon. All rights reserved.
+// Copyright © 2012-2025 Kalele, Inc. All rights reserved.
 //
 // Licensed under the Reciprocal Public License 1.5
 //
 // See: LICENSE.md in repository root directory
 // See: https://opensource.org/license/rpl-1-5
 
+import { Actor } from 'domo-actors'
 import { Source } from '../../Source'
 import { Metadata } from '../../Metadata'
 import { TextState } from '../../State'
@@ -22,6 +23,7 @@ import {
 
 /**
  * In-memory implementation of DocumentStore using Map-based storage.
+ * Extends Actor for use with the actor model.
  *
  * Documents are organized by type name, then by id:
  * - Map<typeName, Map<id, State>>
@@ -44,12 +46,19 @@ import {
  * console.log(result.state) // { name: 'Alice' }
  * ```
  */
-export class InMemoryDocumentStore implements DocumentStore {
+export class InMemoryDocumentStore extends Actor implements DocumentStore {
   /** Storage map: typeName -> id -> State */
   private readonly store = new Map<string, Map<string, TextState>>()
 
   /** Sources/events storage: id -> Source[] */
   private readonly sources = new Map<string, Source<any>[]>()
+
+  /**
+   * Construct an InMemoryDocumentStore.
+   */
+  constructor() {
+    super()
+  }
 
   /**
    * Read a single document by id and type.

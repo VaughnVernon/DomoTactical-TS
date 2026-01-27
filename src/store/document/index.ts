@@ -1,5 +1,5 @@
-// Copyright © 2012-2025 Vaughn Vernon. All rights reserved.
-// Copyright © 2012-2025 Kalele, Inc. All rights reserved.
+// Copyright ï¿½ 2012-2025 Vaughn Vernon. All rights reserved.
+// Copyright ï¿½ 2012-2025 Kalele, Inc. All rights reserved.
 //
 // Licensed under the Reciprocal Public License 1.5
 //
