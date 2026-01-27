@@ -81,6 +81,7 @@ DomoTactical-TS/
 │   │   │   ├── SourcedEntity.ts
 │   │   │   ├── EventSourcedEntity.ts
 │   │   │   ├── CommandSourcedEntity.ts
+│   │   │   ├── ContextualEntity.ts   # Bounded context factory functions
 │   │   │   └── index.ts
 │   │   ├── projections/            # CQRS projection pipeline
 │   │   │   ├── Projectable.ts
@@ -100,6 +101,7 @@ DomoTactical-TS/
 │   │   └── index.ts
 │   ├── testkit/                    # Test utilities
 │   │   ├── TestConfirmer.ts
+│   │   ├── TestJournalSupervisor.ts  # Custom supervisor for error tracking
 │   │   └── index.ts
 │   └── index.ts
 ├── tests/                          # Test suites
@@ -210,6 +212,10 @@ Complex base class for all sourced entities.
 ```typescript
 export abstract class SourcedEntity<T> extends EntityActor {
   protected readonly streamName: string
+
+  // Bounded context support
+  protected contextName(): string          // Override to specify bounded context (default: 'default')
+  protected journalKey(): string           // Returns 'domo-tactical:<contextName>.journal'
 
   // Register source consumers for state transitions
   static registerConsumer<SOURCED, SOURCE>(
@@ -474,18 +480,19 @@ const entries = await reader.readNext(10)
 ```
 
 #### **JournalReader.ts**
-Interface for reading journal entries sequentially (for projections).
+Interface for reading journal entries sequentially (for projections). JournalReader extends ActorProtocol and is created as an actor by the Journal.
 
 **Key Features:**
 - Sequential entry reading
-- Position tracking
+- Position tracking (async)
 - Seek and rewind support
 - Named readers with independent positions
+- Actor-based with supervisor inheritance from Journal
 
 ```typescript
-export interface JournalReader<T> {
-  name(): string
-  position(): number
+export interface JournalReader<T> extends ActorProtocol {
+  name(): Promise<string>           // Async - actor method
+  position(): Promise<number>       // Async - actor method
   readNext(max: number): Promise<Entry<T>[]>
   rewind(): Promise<void>
   seek(position: number): Promise<void>
@@ -496,7 +503,13 @@ const reader = await journal.journalReader('my-projection')
 let entries = await reader.readNext(100)  // Read first batch
 entries = await reader.readNext(100)      // Read next batch
 await reader.rewind()                     // Start over
+
+// Position and name are now async
+const pos = await reader.position()
+const name = await reader.name()
 ```
+
+**Note:** JournalReader actors inherit the supervisor from their parent Journal. This means errors in JournalReader are handled by the same supervisor that handles the Journal.
 
 #### **Entry Adapters**
 Custom serialization for schema evolution and versioning.
@@ -763,6 +776,62 @@ await confirmer.confirm(projectable)
 expect(confirmer.isConfirmed(projectable)).toBe(true)
 ```
 
+#### **TestSupervisor and TestJournalSupervisor**
+Custom supervisor for tracking error recovery in tests.
+
+The `TestSupervisor` interface extends `Supervisor` with methods to track error handling:
+
+```typescript
+import { TestSupervisor, TestJournalSupervisor } from 'domo-tactical/testkit'
+
+export interface TestSupervisor extends Supervisor {
+  errorRecoveryCount(): Promise<number>  // Number of errors handled
+  lastError(): Promise<string | null>    // Message of last error
+  reset(): Promise<void>                 // Reset tracking state
+}
+```
+
+**Usage in tests:**
+
+```typescript
+import { stage, Protocol } from 'domo-actors'
+import { TestJournalSupervisor, TestSupervisor } from 'domo-tactical/testkit'
+
+const SUPERVISOR_NAME = 'test-supervisor'
+
+// Create supervisor - IMPORTANT: type() must match the supervisor name
+// because Environment.supervisor() looks up supervisors by type in the directory
+const supervisorProtocol: Protocol = {
+  type: () => SUPERVISOR_NAME,  // Must match the supervisor name used below
+  instantiator: () => ({ instantiate: () => new TestJournalSupervisor() })
+}
+const supervisor = stage().actorFor<TestSupervisor>(supervisorProtocol, undefined, 'default')
+
+// Create actors under this supervisor
+const journalProtocol: Protocol = {
+  type: () => 'Journal',
+  instantiator: () => ({ instantiate: () => new InMemoryJournal<string>() })
+}
+const journal = stage().actorFor<Journal<string>>(journalProtocol, undefined, SUPERVISOR_NAME)
+
+// After triggering an error, wait for supervision to complete
+async function waitForErrorRecovery(supervisor: TestSupervisor, expectedCount: number) {
+  const timeoutMs = 5000
+  const startTime = Date.now()
+  while (Date.now() - startTime < timeoutMs) {
+    const count = await supervisor.errorRecoveryCount()
+    if (count >= expectedCount) return
+    await new Promise(resolve => setTimeout(resolve, 10))
+  }
+  throw new Error(`Timeout waiting for ${expectedCount} error recoveries`)
+}
+
+// In your test
+await waitForErrorRecovery(supervisor, 1)
+```
+
+**Important:** The supervisor's protocol `type()` must match the supervisor name used when creating other actors. This is because `Environment.supervisor()` looks up supervisors by type in the actor directory.
+
 #### **TestJournal and TestDocumentStore**
 Convenient aliases for test code.
 
@@ -855,7 +924,9 @@ import {
 import {
   SourcedEntity,
   EventSourcedEntity,
-  CommandSourcedEntity
+  CommandSourcedEntity,
+  eventSourcedEntityTypeFor,
+  commandSourcedEntityTypeFor
 } from 'domo-tactical/model/sourcing'
 ```
 
@@ -873,9 +944,179 @@ import {
 ```typescript
 import {
   TestConfirmer,
+  TestSupervisor,           // Interface for test supervisors
+  TestJournalSupervisor,    // Implementation for tracking error recovery
   TestJournal,
   TestDocumentStore
 } from 'domo-tactical/testkit'
+```
+
+## Actor-Based Storage
+
+All storage interfaces (`Journal`, `DocumentStore`, `JournalReader`, `JournalConsumer`) extend `ActorProtocol` from domo-actors. This means storage components are actors and must be created via `stage().actorFor()`.
+
+### Creating Storage Actors
+
+```typescript
+import { stage, Protocol } from 'domo-actors'
+import { Journal, InMemoryJournal, DocumentStore, InMemoryDocumentStore } from 'domo-tactical'
+
+// Create journal as an actor
+const journalProtocol: Protocol = {
+  type: () => 'Journal',
+  instantiator: () => ({ instantiate: () => new InMemoryJournal<string>() })
+}
+const journal = stage().actorFor<Journal<string>>(journalProtocol, undefined, 'default')
+
+// Create document store as an actor
+const storeProtocol: Protocol = {
+  type: () => 'DocumentStore',
+  instantiator: () => ({ instantiate: () => new InMemoryDocumentStore() })
+}
+const documentStore = stage().actorFor<DocumentStore>(storeProtocol, undefined, 'default')
+```
+
+### Custom Supervisors for Storage Actors
+
+Storage actors (Journal, JournalReader, StreamReader) can use custom supervisors for specialized error handling. Child actors created by the Journal inherit its supervisor.
+
+**Important:** When using custom supervisors, the supervisor's protocol `type()` must match the supervisor name used when creating actors. This is because `Environment.supervisor()` looks up supervisors by type in the actor directory.
+
+```typescript
+import { stage, Protocol } from 'domo-actors'
+import { TestJournalSupervisor, TestSupervisor } from 'domo-tactical/testkit'
+
+const SUPERVISOR_NAME = 'my-supervisor'
+
+// The type() MUST match the supervisor name
+const supervisorProtocol: Protocol = {
+  type: () => SUPERVISOR_NAME,  // <-- Must match
+  instantiator: () => ({ instantiate: () => new TestJournalSupervisor() })
+}
+const supervisor = stage().actorFor<TestSupervisor>(supervisorProtocol, undefined, 'default')
+
+// Create journal under this supervisor
+const journalProtocol: Protocol = {
+  type: () => 'Journal',
+  instantiator: () => ({ instantiate: () => new InMemoryJournal<string>() })
+}
+const journal = stage().actorFor<Journal<string>>(journalProtocol, undefined, SUPERVISOR_NAME)
+
+// JournalReader and StreamReader actors created by the journal will inherit this supervisor
+```
+
+### Registering Storage for Bounded Contexts
+
+Sourced entities look up their journal using a bounded context key pattern:
+
+```
+domo-tactical:<contextName>.journal
+domo-tactical:<contextName>.documentStore
+```
+
+Register storage for a bounded context:
+
+```typescript
+// Register journal for the "bank" bounded context
+stage().registerValue('domo-tactical:bank.journal', journal)
+
+// Register document store for the "bank" bounded context
+stage().registerValue('domo-tactical:bank.documentStore', documentStore)
+```
+
+## Bounded Context Support
+
+### Context-Specific Entity Base Classes
+
+Use factory functions to create bounded-context-specific entity base classes:
+
+```typescript
+import { eventSourcedEntityTypeFor, commandSourcedEntityTypeFor } from 'domo-tactical/model/sourcing'
+
+// Create a base class for the "bank" bounded context
+const BankEventSourcedEntity = eventSourcedEntityTypeFor('bank')
+
+// Use it as the base for your entity
+class AccountActor extends BankEventSourcedEntity implements Account {
+  // ... entity implementation
+  // This entity uses the journal at 'domo-tactical:bank.journal'
+}
+
+// Similarly for command-sourced entities
+const BankCommandSourcedEntity = commandSourcedEntityTypeFor('bank')
+
+class TransferCoordinator extends BankCommandSourcedEntity {
+  // ... entity implementation
+}
+```
+
+### The `contextName()` Method
+
+The `SourcedEntity` base class provides a `contextName()` method that returns the bounded context name. By default it returns `'default'`:
+
+```typescript
+export abstract class SourcedEntity<T> extends EntityActor {
+  // Override to specify your bounded context
+  protected contextName(): string {
+    return 'default'
+  }
+
+  // The journal key is derived from the context name
+  protected journalKey(): string {
+    return `domo-tactical:${this.contextName()}.journal`
+  }
+}
+```
+
+The factory functions (`eventSourcedEntityTypeFor`, `commandSourcedEntityTypeFor`) create subclasses that override `contextName()` to return the specified context name.
+
+### Complete Bounded Context Example
+
+```typescript
+import { stage, Protocol } from 'domo-actors'
+import { eventSourcedEntityTypeFor, DomainEvent, InMemoryJournal, Journal } from 'domo-tactical'
+
+// 1. Create the bounded context base class
+const BankEventSourcedEntity = eventSourcedEntityTypeFor('bank')
+
+// 2. Define your domain events
+class AccountOpened extends DomainEvent {
+  constructor(public accountId: string, public balance: number) { super() }
+  override id() { return this.accountId }
+}
+
+// 3. Define your entity using the bounded context base
+class AccountActor extends BankEventSourcedEntity {
+  private balance = 0
+
+  static {
+    BankEventSourcedEntity.registerConsumer(AccountActor, AccountOpened,
+      (account, event) => account.balance = event.balance)
+  }
+
+  async open(initialBalance: number) {
+    await this.apply(new AccountOpened(this.streamName, initialBalance))
+  }
+}
+
+// 4. Set up the infrastructure
+const journalProtocol: Protocol = {
+  type: () => 'Journal',
+  instantiator: () => ({ instantiate: () => new InMemoryJournal<string>() })
+}
+const journal = stage().actorFor<Journal<string>>(journalProtocol, undefined, 'default')
+
+// 5. Register journal for the bounded context
+stage().registerValue('domo-tactical:bank.journal', journal)
+
+// 6. Create entities as actors - they will automatically find their journal
+const accountProtocol: Protocol = {
+  type: () => 'Account',
+  instantiator: () => ({ instantiate: () => new AccountActor('account-123') })
+}
+const account = stage().actorFor<AccountActor>(accountProtocol, undefined, 'default')
+
+await account.open(1000)
 ```
 
 ## Usage Examples
@@ -1165,7 +1406,7 @@ private sourceToEntry<S>(source: Source<S>, ...): Entry<T> {
 
 ## Testing
 
-The project includes comprehensive tests using Vitest (171 tests passing):
+The project includes comprehensive tests using Vitest (177 tests passing):
 
 ```bash
 npm test              # Run tests once
@@ -1214,6 +1455,7 @@ npm run test:coverage # Coverage report
 - ✅ TestConfirmer pending/confirm tracking
 - ✅ Unconfirmed detection
 - ✅ TestJournal and TestDocumentStore aliases
+- ✅ TestSupervisor/TestJournalSupervisor error tracking
 
 ### Example Test
 
