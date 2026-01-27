@@ -6,11 +6,35 @@
 // See: LICENSE.md in repository root directory
 // See: https://opensource.org/license/rpl-1-5
 
-import { describe, it, expect, beforeEach } from 'vitest'
-import { TestJournal } from '../../src/testkit'
-import { JournalReader } from '../../src/store/journal/JournalReader'
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { stage, Protocol } from 'domo-actors'
+import { TestJournalSupervisor, TestSupervisor } from '../../src/testkit'
+import { Journal } from '../../src/store/journal'
 import { Metadata } from '../../src/store/Metadata'
 import { DomainEvent } from '../../src/model/DomainEvent'
+import { InMemoryJournal } from '../../src/store/journal/inmemory/InMemoryJournal'
+
+/** Supervisor name for test journal supervisor */
+const TEST_SUPERVISOR_NAME = 'test-journal-supervisor'
+
+/**
+ * Wait for the supervisor to have processed the expected number of error recoveries.
+ */
+async function waitForErrorRecovery(
+  supervisor: TestSupervisor,
+  expectedCount: number,
+  timeoutMs: number = 5000
+): Promise<void> {
+  const startTime = Date.now()
+  while (Date.now() - startTime < timeoutMs) {
+    const count = await supervisor.errorRecoveryCount()
+    if (count >= expectedCount) {
+      return
+    }
+    await new Promise(resolve => setTimeout(resolve, 10))
+  }
+  throw new Error(`Timeout waiting for ${expectedCount} error recoveries`)
+}
 
 /**
  * Test events for journal reader tests.
@@ -28,16 +52,35 @@ class TestEvent extends DomainEvent {
   }
 }
 
+
 /**
  * Test suite for JournalReader interface and InMemoryJournalReader implementation.
  */
 describe('JournalReader', () => {
-  let journal: TestJournal<string>
+  let journal: Journal<string>
   let metadata: Metadata
+  let supervisor: TestSupervisor
 
   beforeEach(() => {
-    journal = new TestJournal<string>()
+    // Create supervisor - the type() must match the supervisor name used when creating other actors
+    // because Environment.supervisor() looks up by type in the directory
+    const supervisorProtocol: Protocol = {
+      type: () => TEST_SUPERVISOR_NAME,
+      instantiator: () => ({ instantiate: () => new TestJournalSupervisor() })
+    }
+    supervisor = stage().actorFor<TestSupervisor>(supervisorProtocol, undefined, 'default')
+
+    // Create journal under the test supervisor - JournalReader will inherit this supervisor
+    const journalProtocol: Protocol = {
+      type: () => 'Journal',
+      instantiator: () => ({ instantiate: () => new InMemoryJournal<string>() })
+    }
+    journal = stage().actorFor<Journal<string>>(journalProtocol, undefined, TEST_SUPERVISOR_NAME)
     metadata = Metadata.nullMetadata()
+  })
+
+  afterEach(async () => {
+    await stage().close()
   })
 
   describe('Basic reading operations', () => {
@@ -108,8 +151,23 @@ describe('JournalReader', () => {
     it('should throw error when max is zero or negative', async () => {
       const reader = await journal.journalReader('test-reader')
 
-      await expect(reader.readNext(0)).rejects.toThrow('max must be greater than 0')
-      await expect(reader.readNext(-1)).rejects.toThrow('max must be greater than 0')
+      try {
+        await reader.readNext(0)
+        expect.fail('Expected error for max = 0')
+      } catch (error) {
+        expect((error as Error).message).toBe('max must be greater than 0')
+      }
+      // Wait for supervision to complete
+      await waitForErrorRecovery(supervisor, 1)
+
+      try {
+        await reader.readNext(-1)
+        expect.fail('Expected error for max = -1')
+      } catch (error) {
+        expect((error as Error).message).toBe('max must be greater than 0')
+      }
+      // Wait for supervision to complete
+      await waitForErrorRecovery(supervisor, 2)
     })
   })
 
@@ -121,16 +179,16 @@ describe('JournalReader', () => {
 
       const reader = await journal.journalReader('test-reader')
 
-      expect(reader.position()).toBe(0)
+      expect(await reader.position()).toBe(0)
 
       await reader.readNext(1)
-      expect(reader.position()).toBe(1)
+      expect(await reader.position()).toBe(1)
 
       await reader.readNext(2)
-      expect(reader.position()).toBe(3)
+      expect(await reader.position()).toBe(3)
 
       await reader.readNext(10)
-      expect(reader.position()).toBe(3) // No more entries, position unchanged
+      expect(await reader.position()).toBe(3) // No more entries, position unchanged
     })
 
     it('should start at position 0', async () => {
@@ -138,7 +196,7 @@ describe('JournalReader', () => {
 
       const reader = await journal.journalReader('test-reader')
 
-      expect(reader.position()).toBe(0)
+      expect(await reader.position()).toBe(0)
     })
   })
 
@@ -154,21 +212,21 @@ describe('JournalReader', () => {
       const reader = await journal.journalReader('test-reader')
 
       await reader.seek(2)
-      expect(reader.position()).toBe(2)
+      expect(await reader.position()).toBe(2)
 
       const entries = await reader.readNext(2)
       expect(entries).toHaveLength(2)
-      expect(reader.position()).toBe(4)
+      expect(await reader.position()).toBe(4)
     })
 
     it('should allow seeking to beginning', async () => {
       const reader = await journal.journalReader('test-reader')
 
       await reader.readNext(3)
-      expect(reader.position()).toBe(3)
+      expect(await reader.position()).toBe(3)
 
       await reader.seek(0)
-      expect(reader.position()).toBe(0)
+      expect(await reader.position()).toBe(0)
 
       const entries = await reader.readNext(2)
       expect(entries).toHaveLength(2)
@@ -178,7 +236,7 @@ describe('JournalReader', () => {
       const reader = await journal.journalReader('test-reader')
 
       await reader.seek(5)
-      expect(reader.position()).toBe(5)
+      expect(await reader.position()).toBe(5)
 
       const entries = await reader.readNext(10)
       expect(entries).toHaveLength(0)
@@ -189,7 +247,7 @@ describe('JournalReader', () => {
 
       // Seek beyond current size (5 entries)
       await reader.seek(100)
-      expect(reader.position()).toBe(100)
+      expect(await reader.position()).toBe(100)
 
       const entries = await reader.readNext(10)
       expect(entries).toHaveLength(0)
@@ -198,7 +256,15 @@ describe('JournalReader', () => {
     it('should throw error when seeking to negative position', async () => {
       const reader = await journal.journalReader('test-reader')
 
-      await expect(reader.seek(-1)).rejects.toThrow('position cannot be negative')
+      try {
+        await reader.seek(-1)
+        expect.fail('Expected error for negative position')
+      } catch (error) {
+        expect((error as Error).message).toBe('position cannot be negative')
+      }
+
+      // Wait for supervision to complete before test ends
+      await waitForErrorRecovery(supervisor, 1)
     })
   })
 
@@ -213,10 +279,10 @@ describe('JournalReader', () => {
       const reader = await journal.journalReader('test-reader')
 
       await reader.readNext(3)
-      expect(reader.position()).toBe(3)
+      expect(await reader.position()).toBe(3)
 
       await reader.rewind()
-      expect(reader.position()).toBe(0)
+      expect(await reader.position()).toBe(0)
 
       const entries = await reader.readNext(3)
       expect(entries).toHaveLength(3)
@@ -225,10 +291,10 @@ describe('JournalReader', () => {
     it('should allow rewinding when already at start', async () => {
       const reader = await journal.journalReader('test-reader')
 
-      expect(reader.position()).toBe(0)
+      expect(await reader.position()).toBe(0)
 
       await reader.rewind()
-      expect(reader.position()).toBe(0)
+      expect(await reader.position()).toBe(0)
     })
 
     it('should allow re-reading after rewind', async () => {
@@ -250,15 +316,15 @@ describe('JournalReader', () => {
     it('should return the reader name', async () => {
       const reader = await journal.journalReader('my-reader')
 
-      expect(reader.name()).toBe('my-reader')
+      expect(await reader.name()).toBe('my-reader')
     })
 
     it('should support different reader names', async () => {
       const reader1 = await journal.journalReader('reader-1')
       const reader2 = await journal.journalReader('reader-2')
 
-      expect(reader1.name()).toBe('reader-1')
-      expect(reader2.name()).toBe('reader-2')
+      expect(await reader1.name()).toBe('reader-1')
+      expect(await reader2.name()).toBe('reader-2')
     })
   })
 
@@ -274,12 +340,12 @@ describe('JournalReader', () => {
       const reader2 = await journal.journalReader('reader-2')
 
       await reader1.readNext(2)
-      expect(reader1.position()).toBe(2)
-      expect(reader2.position()).toBe(0)
+      expect(await reader1.position()).toBe(2)
+      expect(await reader2.position()).toBe(0)
 
       await reader2.readNext(3)
-      expect(reader1.position()).toBe(2)
-      expect(reader2.position()).toBe(3)
+      expect(await reader1.position()).toBe(2)
+      expect(await reader2.position()).toBe(3)
     })
 
     it('should return same reader instance for same name', async () => {
@@ -287,7 +353,7 @@ describe('JournalReader', () => {
       await reader1.readNext(2)
 
       const reader2 = await journal.journalReader('my-reader')
-      expect(reader2.position()).toBe(2) // Same instance, same position
+      expect(await reader2.position()).toBe(2) // Same instance, same position
     })
 
     it('should allow multiple readers to read simultaneously', async () => {
@@ -365,7 +431,7 @@ describe('JournalReader', () => {
       const batch3 = await projectionReader.readNext(10)
       expect(batch3).toHaveLength(1)
 
-      expect(projectionReader.position()).toBe(5)
+      expect(await projectionReader.position()).toBe(5)
     })
 
     it('should support resuming projection from saved position', async () => {
@@ -378,19 +444,19 @@ describe('JournalReader', () => {
 
       // Process first 5 events
       await reader.readNext(5)
-      const savedPosition = reader.position()
+      const savedPosition = await reader.position()
       expect(savedPosition).toBe(5)
 
       // Simulate restart - get reader again and seek to saved position
       const resumedReader = await journal.journalReader('projection-reader')
       // Note: In a real scenario with persistent storage, the position would be saved
       // Here we're using the same in-memory reader, so position is already preserved
-      expect(resumedReader.position()).toBe(5)
+      expect(await resumedReader.position()).toBe(5)
 
       // Continue processing
       const nextBatch = await resumedReader.readNext(5)
       expect(nextBatch).toHaveLength(5)
-      expect(resumedReader.position()).toBe(10)
+      expect(await resumedReader.position()).toBe(10)
     })
   })
 })

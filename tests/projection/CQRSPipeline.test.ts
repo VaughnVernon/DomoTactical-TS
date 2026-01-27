@@ -13,11 +13,15 @@ import {
   TextProjectionDispatcherActor,
   JournalConsumerActor,
   ProjectToDescription,
+  InMemoryJournal,
+  InMemoryDocumentStore,
   type ProjectionDispatcher,
   type JournalConsumer,
-  type Projection
+  type Projection,
+  type Journal,
+  type DocumentStore
 } from 'domo-tactical'
-import { TestConfirmer, TestJournal, TestDocumentStore } from 'domo-tactical/testkit'
+import { TestConfirmer } from 'domo-tactical/testkit'
 import {
   UserRegistered,
   UserAuthenticated,
@@ -65,17 +69,27 @@ async function waitFor(
  * Tests the full event flow from write to projection using a simple User domain.
  */
 describe('CQRS Projection Pipeline Integration', () => {
-  let journal: TestJournal<string>
-  let documentStore: TestDocumentStore
+  let journal: Journal<string>
+  let documentStore: DocumentStore
   let dispatcher: ProjectionDispatcher
   let consumer: JournalConsumer
   let userProfileProjection: Projection
   let userActivityStatsProjection: Projection
 
   beforeEach(async () => {
-    // Create journal and document store
-    journal = new TestJournal<string>()
-    documentStore = new TestDocumentStore()
+    // Create journal as actor
+    const journalProtocol: Protocol = {
+      type: () => 'Journal',
+      instantiator: () => ({ instantiate: () => new InMemoryJournal<string>() })
+    }
+    journal = stage().actorFor<Journal<string>>(journalProtocol, undefined, 'default')
+
+    // Create document store as actor
+    const storeProtocol: Protocol = {
+      type: () => 'DocumentStore',
+      instantiator: () => ({ instantiate: () => new InMemoryDocumentStore() })
+    }
+    documentStore = stage().actorFor<DocumentStore>(storeProtocol, undefined, 'default')
 
     // Register DocumentStore with Stage for projection access
     stage().registerValue('domo-tactical:test.documentStore', documentStore)

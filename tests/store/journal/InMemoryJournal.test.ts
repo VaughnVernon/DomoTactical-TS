@@ -6,8 +6,10 @@
 // See: LICENSE.md in repository root directory
 // See: https://opensource.org/license/rpl-1-5
 
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { stage, Protocol } from 'domo-actors'
 import { InMemoryJournal } from '../../../src/store/journal/inmemory/InMemoryJournal'
+import { Journal } from '../../../src/store/journal/Journal'
 import { DomainEvent } from '../../../src/model/DomainEvent'
 import { Metadata } from '../../../src/store/Metadata'
 
@@ -54,10 +56,18 @@ interface AccountSnapshot {
 }
 
 describe('InMemoryJournal', () => {
-  let journal: InMemoryJournal<string>
+  let journal: Journal<string>
 
   beforeEach(() => {
-    journal = new InMemoryJournal<string>()
+    const journalProtocol: Protocol = {
+      type: () => 'Journal',
+      instantiator: () => ({ instantiate: () => new InMemoryJournal<string>() })
+    }
+    journal = stage().actorFor<Journal<string>>(journalProtocol, undefined, 'default')
+  })
+
+  afterEach(async () => {
+    await stage().close()
   })
 
   describe('append - single source', () => {

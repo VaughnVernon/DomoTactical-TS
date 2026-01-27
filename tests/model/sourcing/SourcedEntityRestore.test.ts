@@ -10,7 +10,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { stage, Protocol, Definition, Actor } from 'domo-actors'
 import { EventSourcedEntity } from '../../../src/model/sourcing/EventSourcedEntity'
 import { DomainEvent } from '../../../src/model/DomainEvent'
-import { InMemoryJournal } from '../../../src/store/journal'
+import { InMemoryJournal, Journal } from '../../../src/store/journal'
 import { Metadata } from '../../../src/store/Metadata'
 import { TextState } from '../../../src/store/State'
 import { EntryAdapterProvider } from '../../../src/store/EntryAdapterProvider'
@@ -217,7 +217,7 @@ class TestAccount extends EventSourcedEntity {
  * Test suite for SourcedEntity restoration from journal.
  */
 describe('SourcedEntity Restoration', () => {
-  let journal: InMemoryJournal<string>
+  let journal: Journal<string>
 
   beforeEach(async () => {
     // Reset adapter providers
@@ -243,9 +243,14 @@ describe('SourcedEntity Restoration', () => {
     }
     stage().actorFor(supervisorProtocol, undefined, 'default')
 
-    // Create journal and register it on stage
-    journal = new InMemoryJournal<string>()
-    stage().registerValue('domo-tactical:bank.journal', journal)
+    // Create journal as actor and register it on stage
+    // Note: Use 'domo-tactical:default.journal' because TestAccount uses the default context
+    const journalProtocol: Protocol = {
+      type: () => 'Journal',
+      instantiator: () => ({ instantiate: () => new InMemoryJournal<string>() })
+    }
+    journal = stage().actorFor<InMemoryJournal<string>>(journalProtocol, undefined, 'default')
+    stage().registerValue('domo-tactical:default.journal', journal)
   })
 
   afterEach(async () => {

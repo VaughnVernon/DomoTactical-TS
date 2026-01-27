@@ -1,13 +1,15 @@
-// Copyright � 2012-2025 Vaughn Vernon. All rights reserved.
-// Copyright � 2012-2025 Kalele, Inc. All rights reserved.
+// Copyright © 2012-2025 Vaughn Vernon. All rights reserved.
+// Copyright © 2012-2025 Kalele, Inc. All rights reserved.
 //
 // Licensed under the Reciprocal Public License 1.5
 //
 // See: LICENSE.md in repository root directory
 // See: https://opensource.org/license/rpl-1-5
 
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { stage, Protocol } from 'domo-actors'
 import { InMemoryDocumentStore } from '../../../../src/store/document/inmemory/InMemoryDocumentStore'
+import { DocumentStore } from '../../../../src/store/document/DocumentStore'
 import { Metadata } from '../../../../src/store/Metadata'
 import { DomainEvent } from '../../../../src/model/DomainEvent'
 import { Result } from '../../../../src/store/Result'
@@ -39,11 +41,27 @@ interface Product {
   price: number
 }
 
+// Extended interface to access test helper methods
+interface TestDocumentStore extends DocumentStore {
+  getSources<C = any>(id: string): any
+  clear(): void
+  count(type: string): number
+  types(): string[]
+}
+
 describe('InMemoryDocumentStore', () => {
-  let store: InMemoryDocumentStore
+  let store: TestDocumentStore
 
   beforeEach(() => {
-    store = new InMemoryDocumentStore()
+    const storeProtocol: Protocol = {
+      type: () => 'DocumentStore',
+      instantiator: () => ({ instantiate: () => new InMemoryDocumentStore() })
+    }
+    store = stage().actorFor<TestDocumentStore>(storeProtocol, undefined, 'default')
+  })
+
+  afterEach(async () => {
+    await stage().close()
   })
 
   describe('write', () => {
@@ -145,10 +163,10 @@ describe('InMemoryDocumentStore', () => {
       await store.write('user-1', 'User', user, 1)
       await store.write('product-1', 'Product', product, 1)
 
-      expect(store.count('User')).toBe(1)
-      expect(store.count('Product')).toBe(1)
-      expect(store.types()).toContain('User')
-      expect(store.types()).toContain('Product')
+      expect(await store.count('User')).toBe(1)
+      expect(await store.count('Product')).toBe(1)
+      expect(await store.types()).toContain('User')
+      expect(await store.types()).toContain('Product')
     })
   })
 
@@ -292,7 +310,7 @@ describe('InMemoryDocumentStore', () => {
       await store.write('user-1', 'User', user, 1, [event1])
       await store.write('user-1', 'User', user, 2, [event2])
 
-      const sources = store.getSources('user-1')
+      const sources = await store.getSources('user-1')
 
       expect(sources).toHaveLength(2)
       expect(sources[0]).toBe(event1)
@@ -300,7 +318,7 @@ describe('InMemoryDocumentStore', () => {
     })
 
     it('should return empty array for non-existent document', async () => {
-      const sources = store.getSources('user-999')
+      const sources = await store.getSources('user-999')
 
       expect(sources).toHaveLength(0)
     })
@@ -314,8 +332,8 @@ describe('InMemoryDocumentStore', () => {
       await store.write('user-1', 'User', user1, 1)
       await store.write('user-2', 'User', user2, 1)
 
-      expect(store.count('User')).toBe(2)
-      expect(store.count('NonExistent')).toBe(0)
+      expect(await store.count('User')).toBe(2)
+      expect(await store.count('NonExistent')).toBe(0)
     })
 
     it('should list all type names', async () => {
@@ -325,7 +343,7 @@ describe('InMemoryDocumentStore', () => {
       await store.write('user-1', 'User', user, 1)
       await store.write('product-1', 'Product', product, 1)
 
-      const types = store.types()
+      const types = await store.types()
 
       expect(types).toContain('User')
       expect(types).toContain('Product')
@@ -338,11 +356,11 @@ describe('InMemoryDocumentStore', () => {
 
       await store.write('user-1', 'User', user, 1, [event])
 
-      store.clear()
+      await store.clear()
 
-      expect(store.count('User')).toBe(0)
-      expect(store.types()).toHaveLength(0)
-      expect(store.getSources('user-1')).toHaveLength(0)
+      expect(await store.count('User')).toBe(0)
+      expect((await store.types())).toHaveLength(0)
+      expect((await store.getSources('user-1'))).toHaveLength(0)
     })
   })
 

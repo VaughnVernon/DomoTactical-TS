@@ -17,8 +17,8 @@ import {
   ProjectToDescription,
   TextProjectable
 } from '../../src/model/projections'
-import { JournalConsumerActor, JournalConsumer } from '../../src/store/journal'
-import { TestConfirmer, TestJournal } from '../../src/testkit'
+import { JournalConsumerActor, JournalConsumer, Journal, InMemoryJournal } from '../../src/store/journal'
+import { TestConfirmer } from '../../src/testkit'
 import { Entry } from '../../src/store/journal'
 import { JournalReader } from '../../src/store/journal/JournalReader'
 import { Metadata } from '../../src/store/Metadata'
@@ -105,7 +105,7 @@ async function waitFor(
  * Test suite for JournalConsumerActor.
  */
 describe('JournalConsumerActor', () => {
-  let journal: TestJournal<string>
+  let journal: Journal<string>
   let reader: JournalReader<string>
   let dispatcher: ProjectionDispatcher
   let consumer: JournalConsumer
@@ -122,8 +122,12 @@ describe('JournalConsumerActor', () => {
     }
     stage().actorFor(supervisorProtocol, undefined, 'default')
 
-    // Create journal and reader
-    journal = new TestJournal<string>()
+    // Create journal as actor and reader
+    const journalProtocol: Protocol = {
+      type: () => 'Journal',
+      instantiator: () => ({ instantiate: () => new InMemoryJournal<string>() })
+    }
+    journal = stage().actorFor<Journal<string>>(journalProtocol, undefined, 'default')
     reader = await journal.journalReader('test-reader')
 
     // Create confirmer
