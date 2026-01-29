@@ -7,8 +7,8 @@
 // See: https://opensource.org/license/rpl-1-5
 
 import { ActorProtocol } from 'domo-actors'
-import { Projectable } from './Projectable'
-import { ProjectionControl } from './ProjectionControl'
+import { Projectable } from './Projectable.js'
+import { ProjectionControl } from './ProjectionControl.js'
 
 /**
  * Protocol for all Projection implementations.

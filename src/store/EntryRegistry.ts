@@ -6,8 +6,8 @@
 // See: LICENSE.md in repository root directory
 // See: https://opensource.org/license/rpl-1-5
 
-import { Source } from './Source'
-import { ContextProfile, PropertyTransforms } from './ContextProfile'
+import { Source } from './Source.js'
+import { ContextProfile, PropertyTransforms } from './ContextProfile.js'
 
 // Re-export PropertyTransforms for backward compatibility
 export { PropertyTransforms }

@@ -6,7 +6,7 @@
 // See: LICENSE.md in repository root directory
 // See: https://opensource.org/license/rpl-1-5
 
-import { Command } from './Command'
+import { Command } from './Command.js'
 
 /**
  * Provides the means to request the identity of the Command.

@@ -6,10 +6,10 @@
 // See: LICENSE.md in repository root directory
 // See: https://opensource.org/license/rpl-1-5
 
-import { State, TextState } from './State'
-import { StateAdapter } from './StateAdapter'
-import { DefaultTextStateAdapter } from './DefaultTextStateAdapter'
-import { Metadata } from './Metadata'
+import { State, TextState } from './State.js'
+import { StateAdapter } from './StateAdapter.js'
+import { DefaultTextStateAdapter } from './DefaultTextStateAdapter.js'
+import { Metadata } from './Metadata.js'
 
 /**
  * Registry for StateAdapter instances.

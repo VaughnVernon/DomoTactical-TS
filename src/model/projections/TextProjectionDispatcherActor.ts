@@ -6,11 +6,11 @@
 // See: LICENSE.md in repository root directory
 // See: https://opensource.org/license/rpl-1-5
 
-import { AbstractProjectionDispatcherActor } from './AbstractProjectionDispatcherActor'
-import { Projectable } from './Projectable'
-import { ProjectToDescription } from './ProjectToDescription'
-import { ProjectionControl, BasicProjectionControl } from './ProjectionControl'
-import { Confirmer } from './Confirmer'
+import { AbstractProjectionDispatcherActor } from './AbstractProjectionDispatcherActor.js'
+import { Projectable } from './Projectable.js'
+import { ProjectToDescription } from './ProjectToDescription.js'
+import { ProjectionControl, BasicProjectionControl } from './ProjectionControl.js'
+import { Confirmer } from './Confirmer.js'
 
 /**
  * Text/JSON projection dispatcher Actor.

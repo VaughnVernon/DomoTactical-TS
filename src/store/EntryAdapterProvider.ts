@@ -6,15 +6,15 @@
 // See: LICENSE.md in repository root directory
 // See: https://opensource.org/license/rpl-1-5
 
-import { Source } from './Source'
-import { Entry } from './journal/Entry'
-import { TextEntry } from './journal/TextEntry'
-import { EntryAdapter } from './EntryAdapter'
-import { DefaultTextEntryAdapter } from './DefaultTextEntryAdapter'
-import { Metadata } from './Metadata'
+import { Source } from './Source.js'
+import { Entry } from './journal/Entry.js'
+import { TextEntry } from './journal/TextEntry.js'
+import { EntryAdapter } from './EntryAdapter.js'
+import { DefaultTextEntryAdapter } from './DefaultTextEntryAdapter.js'
+import { Metadata } from './Metadata.js'
 // Note: Circular import with ContextProfile is safe because we only
 // access it at runtime inside defaultProvider(), not at module load time.
-import { ContextProfile } from './ContextProfile'
+import { ContextProfile } from './ContextProfile.js'
 
 /**
  * Registry for EntryAdapter instances.

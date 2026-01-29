@@ -6,7 +6,7 @@
 // See: LICENSE.md in repository root directory
 // See: https://opensource.org/license/rpl-1-5
 
-import { Result } from './Result'
+import { Result } from './Result.js'
 
 /**
  * Exception thrown when storage operations fail.

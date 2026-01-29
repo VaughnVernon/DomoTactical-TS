@@ -17,9 +17,9 @@
  * NOT suitable for production use.
  */
 
-export { TestConfirmer } from './TestConfirmer'
-export { TestJournalSupervisor, type TestSupervisor } from './TestJournalSupervisor'
+export { TestConfirmer } from './TestConfirmer.js'
+export { TestJournalSupervisor, type TestSupervisor } from './TestJournalSupervisor.js'
 
 // Convenient aliases for test utilities
-export { InMemoryJournal as TestJournal } from '../store/journal/inmemory/InMemoryJournal'
-export { InMemoryDocumentStore as TestDocumentStore } from '../store/document/inmemory/InMemoryDocumentStore'
+export { InMemoryJournal as TestJournal } from '../store/journal/inmemory/InMemoryJournal.js'
+export { InMemoryDocumentStore as TestDocumentStore } from '../store/document/inmemory/InMemoryDocumentStore.js'

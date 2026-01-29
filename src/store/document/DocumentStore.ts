@@ -7,11 +7,11 @@
 // See: https://opensource.org/license/rpl-1-5
 
 import { ActorProtocol } from 'domo-actors'
-import { Source } from '../Source'
-import { Metadata } from '../Metadata'
-import { State } from '../State'
-import { Result } from '../Result'
-import { StorageException } from '../StorageException'
+import { Source } from '../Source.js'
+import { Metadata } from '../Metadata.js'
+import { State } from '../State.js'
+import { Result } from '../Result.js'
+import { StorageException } from '../StorageException.js'
 
 /**
  * Outcome type for document store operations.

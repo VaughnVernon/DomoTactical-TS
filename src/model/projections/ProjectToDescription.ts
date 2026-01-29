@@ -6,7 +6,7 @@
 // See: LICENSE.md in repository root directory
 // See: https://opensource.org/license/rpl-1-5
 
-import { Projection } from './Projection'
+import { Projection } from './Projection.js'
 
 /**
  * Describes why a Projection should receive a Projectable.

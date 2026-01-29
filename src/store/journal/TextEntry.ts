@@ -6,7 +6,7 @@
 // See: LICENSE.md in repository root directory
 // See: https://opensource.org/license/rpl-1-5
 
-import { Entry } from './Entry'
+import { Entry } from './Entry.js'
 
 /**
  * Concrete implementation of Entry for text/JSON-based entries.

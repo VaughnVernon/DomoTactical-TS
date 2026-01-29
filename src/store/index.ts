@@ -6,13 +6,13 @@
 // See: LICENSE.md in repository root directory
 // See: https://opensource.org/license/rpl-1-5
 
-export { Source } from './Source'
-export { Metadata } from './Metadata'
-export { State, BinaryState, TextState, ObjectState } from './State'
-export { Result } from './Result'
-export { StorageException } from './StorageException'
-export { EntryAdapterProvider } from './EntryAdapterProvider'
-export { StateAdapterProvider } from './StateAdapterProvider'
-export { DefaultTextEntryAdapter } from './DefaultTextEntryAdapter'
-export { EntryRegistry, type PropertyTransforms } from './EntryRegistry'
-export { ContextProfile, type SourceTypeSpec } from './ContextProfile'
+export { Source } from './Source.js'
+export { Metadata } from './Metadata.js'
+export { State, BinaryState, TextState, ObjectState } from './State.js'
+export { Result } from './Result.js'
+export { StorageException } from './StorageException.js'
+export { EntryAdapterProvider } from './EntryAdapterProvider.js'
+export { StateAdapterProvider } from './StateAdapterProvider.js'
+export { DefaultTextEntryAdapter } from './DefaultTextEntryAdapter.js'
+export { EntryRegistry, type PropertyTransforms } from './EntryRegistry.js'
+export { ContextProfile, type SourceTypeSpec } from './ContextProfile.js'

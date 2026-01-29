@@ -6,7 +6,7 @@
 // See: LICENSE.md in repository root directory
 // See: https://opensource.org/license/rpl-1-5
 
-import { Metadata } from './Metadata'
+import { Metadata } from './Metadata.js'
 
 /**
  * Abstract base class for state persistence.

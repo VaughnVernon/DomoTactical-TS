@@ -6,13 +6,13 @@
 // See: LICENSE.md in repository root directory
 // See: https://opensource.org/license/rpl-1-5
 
-export { SourcedEntity } from './SourcedEntity'
-export { EventSourcedEntity } from './EventSourcedEntity'
-export { CommandSourcedEntity } from './CommandSourcedEntity'
+export { SourcedEntity } from './SourcedEntity.js'
+export { EventSourcedEntity } from './EventSourcedEntity.js'
+export { CommandSourcedEntity } from './CommandSourcedEntity.js'
 export {
   eventSourcedEntityTypeFor,
   commandSourcedEntityTypeFor,
   eventSourcedContextFor,
   commandSourcedContextFor,
   type ContextSourceTypes
-} from './ContextualEntity'
+} from './ContextualEntity.js'

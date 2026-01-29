@@ -21,11 +21,11 @@ export {
   DefaultTextEntryAdapter,
   EntryRegistry,
   ContextProfile,
-} from './store'
+} from './store/index.js'
 
-export type { PropertyTransforms, SourceTypeSpec } from './store'
+export type { PropertyTransforms, SourceTypeSpec } from './store/index.js'
 
-export type { Journal, StreamReader, JournalReader, Entry, JournalConsumer, StreamInfo } from './store/journal'
+export type { Journal, StreamReader, JournalReader, Entry, JournalConsumer, StreamInfo } from './store/journal/index.js'
 export {
   AppendResult,
   EntryStream,
@@ -40,7 +40,7 @@ export {
   TombstoneResult,
   DeleteResult,
   TruncateResult,
-} from './store/journal'
+} from './store/journal/index.js'
 
 export type {
   DocumentStore,
@@ -49,8 +49,8 @@ export type {
   ReadAllResult,
   WriteResult,
   Outcome as DocumentOutcome
-} from './store/document'
-export { InMemoryDocumentStore } from './store/document'
+} from './store/document/index.js'
+export { InMemoryDocumentStore } from './store/document/index.js'
 
 // Model exports
 export {
@@ -61,7 +61,7 @@ export {
   EntityActor,
   ApplyFailedError,
   Applicable,
-} from './model'
+} from './model/index.js'
 
 export {
   SourcedEntity,
@@ -71,12 +71,12 @@ export {
   commandSourcedEntityTypeFor,
   eventSourcedContextFor,
   commandSourcedContextFor,
-} from './model/sourcing'
+} from './model/sourcing/index.js'
 
-export type { ContextSourceTypes } from './model/sourcing'
+export type { ContextSourceTypes } from './model/sourcing/index.js'
 
 // Projection exports
-export type { Projectable, Projection, ProjectionControl, Confirmer, ProjectionDispatcher } from './model/projections'
+export type { Projectable, Projection, ProjectionControl, Confirmer, ProjectionDispatcher } from './model/projections/index.js'
 export {
   AbstractProjectable,
   TextProjectable,
@@ -86,4 +86,4 @@ export {
   AbstractProjectionDispatcherActor,
   TextProjectionDispatcherActor,
   ProjectionSupervisor,
-} from './model/projections'
+} from './model/projections/index.js'

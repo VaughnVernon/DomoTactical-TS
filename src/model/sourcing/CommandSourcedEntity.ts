@@ -6,8 +6,8 @@
 // See: LICENSE.md in repository root directory
 // See: https://opensource.org/license/rpl-1-5
 
-import { Command } from '../Command'
-import { SourcedEntity } from './SourcedEntity'
+import { Command } from '../Command.js'
+import { SourcedEntity } from './SourcedEntity.js'
 
 /**
  * A SourcedEntity for concrete types of Command.

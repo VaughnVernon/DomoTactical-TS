@@ -6,9 +6,9 @@
 // See: LICENSE.md in repository root directory
 // See: https://opensource.org/license/rpl-1-5
 
-import { StateAdapter } from './StateAdapter'
-import { TextState } from './State'
-import { Metadata } from './Metadata'
+import { StateAdapter } from './StateAdapter.js'
+import { TextState } from './State.js'
+import { Metadata } from './Metadata.js'
 
 /**
  * Default adapter for JSON/text-based State serialization.

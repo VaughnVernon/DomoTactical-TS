@@ -6,9 +6,9 @@
 // See: LICENSE.md in repository root directory
 // See: https://opensource.org/license/rpl-1-5
 
-import { Result } from '../Result'
-import { StorageException } from '../StorageException'
-import { Outcome } from './Outcome'
+import { Result } from '../Result.js'
+import { StorageException } from '../StorageException.js'
+import { Outcome } from './Outcome.js'
 
 /**
  * Result of a soft delete operation on a stream.

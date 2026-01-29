@@ -6,8 +6,8 @@
 // See: LICENSE.md in repository root directory
 // See: https://opensource.org/license/rpl-1-5
 
-import { Projection } from './Projection'
-import { ProjectToDescription } from './ProjectToDescription'
+import { Projection } from './Projection.js'
+import { ProjectToDescription } from './ProjectToDescription.js'
 
 /**
  * Matches Projectables to Projections using pattern-based criteria.

@@ -7,11 +7,11 @@
 // See: https://opensource.org/license/rpl-1-5
 
 import { Actor, ActorProtocol } from 'domo-actors'
-import { JournalReader } from './JournalReader'
-import { Entry } from './Entry'
-import { ProjectionDispatcher } from '../../model/projections/ProjectionDispatcher'
-import { Projectable } from '../../model/projections/Projectable'
-import { TextProjectable } from '../../model/projections/Projectable'
+import { JournalReader } from './JournalReader.js'
+import { Entry } from './Entry.js'
+import { ProjectionDispatcher } from '../../model/projections/ProjectionDispatcher.js'
+import { Projectable } from '../../model/projections/Projectable.js'
+import { TextProjectable } from '../../model/projections/Projectable.js'
 
 
 /**

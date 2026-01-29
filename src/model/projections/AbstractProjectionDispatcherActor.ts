@@ -7,10 +7,10 @@
 // See: https://opensource.org/license/rpl-1-5
 
 import { Actor, Protocol, Definition } from 'domo-actors'
-import { Projection } from './Projection'
-import { ProjectToDescription } from './ProjectToDescription'
-import { MatchableProjections } from './MatchableProjections'
-import { ProjectionDispatcher } from './ProjectionDispatcher'
+import { Projection } from './Projection.js'
+import { ProjectToDescription } from './ProjectToDescription.js'
+import { MatchableProjections } from './MatchableProjections.js'
+import { ProjectionDispatcher } from './ProjectionDispatcher.js'
 
 /**
  * Abstract base of all ProjectionDispatcher Actor types.

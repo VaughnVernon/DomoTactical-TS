@@ -6,9 +6,9 @@
 // See: LICENSE.md in repository root directory
 // See: https://opensource.org/license/rpl-1-5
 
-import { EntryAdapterProvider } from './EntryAdapterProvider'
-import { Source } from './Source'
-import { DefaultTextEntryAdapter } from './DefaultTextEntryAdapter'
+import { EntryAdapterProvider } from './EntryAdapterProvider.js'
+import { Source } from './Source.js'
+import { DefaultTextEntryAdapter } from './DefaultTextEntryAdapter.js'
 
 /**
  * Optional property transforms for converting serialized values during reconstruction.

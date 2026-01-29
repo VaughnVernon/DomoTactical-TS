@@ -6,8 +6,8 @@
 // See: LICENSE.md in repository root directory
 // See: https://opensource.org/license/rpl-1-5
 
-import { Metadata } from '../store/Metadata'
-import { Source } from '../store/Source'
+import { Metadata } from '../store/Metadata.js'
+import { Source } from '../store/Source.js'
 
 /**
  * The elements used in the attempted apply operation.

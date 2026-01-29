@@ -6,8 +6,8 @@
 // See: LICENSE.md in repository root directory
 // See: https://opensource.org/license/rpl-1-5
 
-import { Entry } from '../../store/journal/Entry'
-import { State } from '../../store/State'
+import { Entry } from '../../store/journal/Entry.js'
+import { State } from '../../store/State.js'
 
 /**
  * Wrapper around state and/or entries that can be projected to a query model view.

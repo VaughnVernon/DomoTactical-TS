@@ -6,9 +6,9 @@
 // See: LICENSE.md in repository root directory
 // See: https://opensource.org/license/rpl-1-5
 
-import { Source } from './Source'
-import { Entry } from './journal/Entry'
-import { Metadata } from './Metadata'
+import { Source } from './Source.js'
+import { Entry } from './journal/Entry.js'
+import { Metadata } from './Metadata.js'
 
 /**
  * Adapts native Source instances to raw Entry instances and vice versa.

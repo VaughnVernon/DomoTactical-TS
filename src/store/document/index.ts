@@ -13,6 +13,6 @@ export {
   ReadAllResult,
   WriteResult,
   Outcome
-} from './DocumentStore'
+} from './DocumentStore.js'
 
-export { InMemoryDocumentStore } from './inmemory/InMemoryDocumentStore'
+export { InMemoryDocumentStore } from './inmemory/InMemoryDocumentStore.js'

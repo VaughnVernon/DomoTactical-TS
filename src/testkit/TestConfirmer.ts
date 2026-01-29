@@ -6,7 +6,7 @@
 // See: LICENSE.md in repository root directory
 // See: https://opensource.org/license/rpl-1-5
 
-import { Confirmer, Projectable } from '../model/projections'
+import { Confirmer, Projectable } from '../model/projections/index.js'
 
 /**
  * Simple in-memory confirmer for testing and development.

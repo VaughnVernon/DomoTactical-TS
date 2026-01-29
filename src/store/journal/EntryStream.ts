@@ -6,8 +6,8 @@
 // See: LICENSE.md in repository root directory
 // See: https://opensource.org/license/rpl-1-5
 
-import { State } from '../State'
-import { Entry } from './Entry'
+import { State } from '../State.js'
+import { Entry } from './Entry.js'
 
 /**
  * The entries and possible snapshot of a full or partial stream of a given named stream.

@@ -6,9 +6,9 @@
 // See: LICENSE.md in repository root directory
 // See: https://opensource.org/license/rpl-1-5
 
-export { Command } from './Command'
-export { DomainEvent } from './DomainEvent'
-export { IdentifiedCommand } from './IdentifiedCommand'
-export { IdentifiedDomainEvent } from './IdentifiedDomainEvent'
-export { EntityActor } from './EntityActor'
-export { ApplyFailedError, Applicable } from './ApplyFailedError'
+export { Command } from './Command.js'
+export { DomainEvent } from './DomainEvent.js'
+export { IdentifiedCommand } from './IdentifiedCommand.js'
+export { IdentifiedDomainEvent } from './IdentifiedDomainEvent.js'
+export { EntityActor } from './EntityActor.js'
+export { ApplyFailedError, Applicable } from './ApplyFailedError.js'

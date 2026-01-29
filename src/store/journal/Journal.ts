@@ -7,17 +7,17 @@
 // See: https://opensource.org/license/rpl-1-5
 
 import { ActorProtocol } from 'domo-actors'
-import { Metadata } from '../Metadata'
-import { Result } from '../Result'
-import { Source } from '../Source'
-import { StorageException } from '../StorageException'
-import { DeleteResult } from './DeleteResult'
-import { EntryStream } from './EntryStream'
-import { JournalReader } from './JournalReader'
-import { Outcome } from './Outcome'
-import { StreamInfo } from './StreamInfo'
-import { TombstoneResult } from './TombstoneResult'
-import { TruncateResult } from './TruncateResult'
+import { Metadata } from '../Metadata.js'
+import { Result } from '../Result.js'
+import { Source } from '../Source.js'
+import { StorageException } from '../StorageException.js'
+import { DeleteResult } from './DeleteResult.js'
+import { EntryStream } from './EntryStream.js'
+import { JournalReader } from './JournalReader.js'
+import { Outcome } from './Outcome.js'
+import { StreamInfo } from './StreamInfo.js'
+import { TombstoneResult } from './TombstoneResult.js'
+import { TruncateResult } from './TruncateResult.js'
 
 /**
  * Result of an append operation, containing all contextual information.

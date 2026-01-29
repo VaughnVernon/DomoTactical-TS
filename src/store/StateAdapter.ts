@@ -6,8 +6,8 @@
 // See: LICENSE.md in repository root directory
 // See: https://opensource.org/license/rpl-1-5
 
-import { State } from './State'
-import { Metadata } from './Metadata'
+import { State } from './State.js'
+import { Metadata } from './Metadata.js'
 
 /**
  * Adapts native state to raw State instances and vice versa.

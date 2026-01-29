@@ -6,17 +6,17 @@
 // See: LICENSE.md in repository root directory
 // See: https://opensource.org/license/rpl-1-5
 
-import { EntityActor } from '../EntityActor'
-import { ApplyFailedError, Applicable } from '../ApplyFailedError'
-import { Source } from '../../store/Source'
-import { Metadata } from '../../store/Metadata'
-import { Journal } from '../../store/journal/Journal'
-import { Result } from '../../store/Result'
-import { StorageException } from '../../store/StorageException'
-import { EntryAdapterProvider } from '../../store/EntryAdapterProvider'
-import { ContextProfile } from '../../store/ContextProfile'
-import { StateAdapterProvider } from '../../store/StateAdapterProvider'
-import { State } from '../../store/State'
+import { EntityActor } from '../EntityActor.js'
+import { ApplyFailedError, Applicable } from '../ApplyFailedError.js'
+import { Source } from '../../store/Source.js'
+import { Metadata } from '../../store/Metadata.js'
+import { Journal } from '../../store/journal/Journal.js'
+import { Result } from '../../store/Result.js'
+import { StorageException } from '../../store/StorageException.js'
+import { EntryAdapterProvider } from '../../store/EntryAdapterProvider.js'
+import { ContextProfile } from '../../store/ContextProfile.js'
+import { StateAdapterProvider } from '../../store/StateAdapterProvider.js'
+import { State } from '../../store/State.js'
 
 /**
  * Type for source consumer functions that apply sources to entities.

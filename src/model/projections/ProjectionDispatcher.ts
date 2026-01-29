@@ -7,8 +7,8 @@
 // See: https://opensource.org/license/rpl-1-5
 
 import { ActorProtocol } from 'domo-actors'
-import { Projectable } from './Projectable'
-import { ProjectToDescription } from './ProjectToDescription'
+import { Projectable } from './Projectable.js'
+import { ProjectToDescription } from './ProjectToDescription.js'
 
 /**
  * Dispatches Projectables to matching Projections.

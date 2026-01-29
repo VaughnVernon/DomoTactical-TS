@@ -7,11 +7,11 @@
 // See: https://opensource.org/license/rpl-1-5
 
 import { Actor } from 'domo-actors'
-import { Source } from '../../Source'
-import { Metadata } from '../../Metadata'
-import { TextState } from '../../State'
-import { Result } from '../../Result'
-import { StorageException } from '../../StorageException'
+import { Source } from '../../Source.js'
+import { Metadata } from '../../Metadata.js'
+import { TextState } from '../../State.js'
+import { Result } from '../../Result.js'
+import { StorageException } from '../../StorageException.js'
 import {
   DocumentStore,
   DocumentBundle,
@@ -19,7 +19,7 @@ import {
   ReadAllResult,
   WriteResult,
   Outcome
-} from '../DocumentStore'
+} from '../DocumentStore.js'
 
 /**
  * In-memory implementation of DocumentStore using Map-based storage.

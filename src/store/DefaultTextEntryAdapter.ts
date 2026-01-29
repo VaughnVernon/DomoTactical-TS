@@ -6,10 +6,10 @@
 // See: LICENSE.md in repository root directory
 // See: https://opensource.org/license/rpl-1-5
 
-import { Source } from './Source'
-import { EntryAdapter } from './EntryAdapter'
-import { TextEntry } from './journal/TextEntry'
-import { Metadata } from './Metadata'
+import { Source } from './Source.js'
+import { EntryAdapter } from './EntryAdapter.js'
+import { TextEntry } from './journal/TextEntry.js'
+import { Metadata } from './Metadata.js'
 
 /**
  * Default adapter for JSON/text-based Entry serialization.

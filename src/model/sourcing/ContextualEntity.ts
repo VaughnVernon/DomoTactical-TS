@@ -6,9 +6,9 @@
 // See: LICENSE.md in repository root directory
 // See: https://opensource.org/license/rpl-1-5
 
-import { EventSourcedEntity } from './EventSourcedEntity'
-import { CommandSourcedEntity } from './CommandSourcedEntity'
-import { ContextProfile, SourceTypeSpec } from '../../store/ContextProfile'
+import { EventSourcedEntity } from './EventSourcedEntity.js'
+import { CommandSourcedEntity } from './CommandSourcedEntity.js'
+import { ContextProfile, SourceTypeSpec } from '../../store/ContextProfile.js'
 
 /**
  * Configuration for creating a context with optional Source registration.
