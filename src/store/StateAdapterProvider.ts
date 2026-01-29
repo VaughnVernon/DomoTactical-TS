@@ -21,7 +21,7 @@ import { Metadata } from './Metadata'
  * @example
  * ```typescript
  * // Get the singleton instance
- * const provider = StateAdapterProvider.getInstance()
+ * const provider = StateAdapterProvider.instance()
  *
  * // Register a custom adapter
  * provider.registerAdapter('AccountState', new AccountStateAdapter())
@@ -34,15 +34,16 @@ import { Metadata } from './Metadata'
  * ```
  */
 export class StateAdapterProvider {
-  private static instance: StateAdapterProvider | null = null
+  private static _instance: StateAdapterProvider | null = null
 
   /** Map of state type name to adapter */
   private readonly adapters = new Map<string, StateAdapter<any, any>>()
 
   /**
-   * Private constructor for singleton pattern.
+   * Construct a new StateAdapterProvider.
+   * Use instance() for the singleton.
    */
-  private constructor() {}
+  constructor() {}
 
   /**
    * Get the singleton instance.
@@ -50,11 +51,20 @@ export class StateAdapterProvider {
    *
    * @returns StateAdapterProvider the singleton instance
    */
-  static getInstance(): StateAdapterProvider {
-    if (!StateAdapterProvider.instance) {
-      StateAdapterProvider.instance = new StateAdapterProvider()
+  static instance(): StateAdapterProvider {
+    if (!StateAdapterProvider._instance) {
+      StateAdapterProvider._instance = new StateAdapterProvider()
     }
-    return StateAdapterProvider.instance
+    return StateAdapterProvider._instance
+  }
+
+  /**
+   * Get the singleton instance.
+   * @deprecated Use instance() instead
+   * @returns StateAdapterProvider the singleton instance
+   */
+  static getInstance(): StateAdapterProvider {
+    return StateAdapterProvider.instance()
   }
 
   /**
@@ -62,7 +72,7 @@ export class StateAdapterProvider {
    * Clears all registered adapters.
    */
   static reset(): void {
-    StateAdapterProvider.instance = null
+    StateAdapterProvider._instance = null
   }
 
   /**
