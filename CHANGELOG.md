@@ -5,6 +5,196 @@ All notable changes to DomoTactical-TS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-01-29
+
+### Changed
+
+#### ESM Module Resolution
+
+All TypeScript source files now use explicit `.js` extensions in imports for proper ECMAScript Module (ESM) compatibility. This enables the compiled JavaScript to run directly in Node.js without bundlers.
+
+**What Changed:**
+- All relative imports now include `.js` extensions (e.g., `import { Foo } from './Foo.js'`)
+- Directory imports now use explicit `/index.js` paths (e.g., `import { Bar } from './store/index.js'`)
+- Updated `domo-actors` dependency to `^1.2.0` (which also has ESM fixes)
+
+**Why This Matters:**
+- Compiled JavaScript now works with direct `node` execution
+- No longer requires bundlers (webpack, esbuild, etc.) or tsx for ESM resolution
+- Better compatibility with modern Node.js ESM requirements
+
+**No Breaking Changes:**
+- Import paths in your code remain the same (e.g., `import { EventSourcedEntity } from 'domo-tactical'`)
+- Only internal imports were updated
+
+### Added
+
+#### Stream Lifecycle Management
+
+New stream lifecycle management features based on EventStoreDB/KurrentDB patterns.
+
+**New Stream Operations:**
+
+- `journal.tombstone(streamName)` - Permanently delete a stream (hard delete). Stream cannot be reopened.
+- `journal.softDelete(streamName)` - Mark stream as deleted but allow reopening by appending.
+- `journal.truncateBefore(streamName, beforeVersion)` - Hide events before a version.
+- `journal.streamInfo(streamName)` - Get stream state information.
+
+**New Types:**
+
+- `StreamState` enum - Expected version states for optimistic concurrency:
+  - `StreamState.Any` (-2) - Skip version check
+  - `StreamState.NoStream` (-1) - Expect stream doesn't exist
+  - `StreamState.StreamExists` (-4) - Expect stream exists
+- `StreamInfo` interface - Stream state information
+- `TombstoneResult` - Result of tombstone operations
+- `DeleteResult` - Result of soft delete operations
+- `TruncateResult` - Result of truncate operations
+
+**Optimistic Concurrency:**
+
+Expected version validation is now enforced on all append operations:
+- Concrete version (e.g., `5`) expects stream to be at version 4
+- `StreamState.Any` bypasses version checking
+- `StreamState.NoStream` requires stream to not exist
+- `StreamState.StreamExists` requires stream to have at least one event
+
+**EntryStream Enhancements:**
+
+- `isTombstoned` flag - true if stream is permanently deleted
+- `isSoftDeleted` flag - true if stream is soft-deleted
+- `isDeleted()` method - true if either deleted flag is set
+- Static factory methods: `tombstoned()`, `softDeleted()`, `empty()`
+
+**AppendResult Enhancements:**
+
+- `isConcurrencyViolation()` - Check if append failed due to version mismatch
+- `isStreamDeleted()` - Check if append failed because stream was deleted
+- `isSuccess()` now returns false for concurrency violations and stream deleted
+
+**Result Enum:**
+
+- Added `Result.StreamDeleted` value
+
+**Usage Examples:**
+
+```typescript
+// Tombstone (hard delete)
+const result = await journal.tombstone('user-123')
+if (result.isSuccess()) {
+  console.log('Stream permanently deleted')
+}
+
+// Soft delete
+await journal.softDelete('order-456')
+// Reopen by appending
+await journal.append('order-456', nextVersion, event, metadata)
+
+// Truncate old events
+await journal.truncateBefore('account-789', 100)
+
+// Check stream state
+const info = await journal.streamInfo('stream-name')
+if (info.isTombstoned) {
+  console.log('Stream was permanently deleted')
+}
+
+// Optimistic concurrency
+const result = await journal.append('stream', StreamState.NoStream, event, metadata)
+if (result.isConcurrencyViolation()) {
+  console.log('Stream already exists')
+}
+```
+
+#### ContextProfile - Context-Scoped Source Registration
+
+New `ContextProfile` class provides context-scoped EntryAdapterProvider instances with a fluent registration API. This solves two problems:
+
+1. **Boilerplate Reduction**: Simple fluent API for registering Source types
+2. **Test Isolation**: Each context has its own adapter registry, avoiding singleton issues
+
+**New Classes:**
+
+- `ContextProfile` - Context-scoped EntryAdapterProvider with fluent registration API
+- `EntryRegistry` - Simple global registry (delegates to `ContextProfile.forContext('default')`)
+
+**New Types:**
+
+- `PropertyTransforms` - Record type for property transformation functions
+- `SourceTypeSpec` - Configuration for a Source type with optional transforms
+- `ContextSourceTypes` - Configuration for context factory functions
+
+**New Source Date Utilities:**
+
+- `Source.asDate(value)` - Static helper to convert number/string to Date (use as transform)
+- `source.dateSourced()` - Instance method to get dateTimeSourced as Date
+- `source.dateOf(propertyName)` - Instance method to get any property as Date
+
+**Updated Context Functions:**
+
+- `eventSourcedContextFor(contextName, config?)` - Now registers sources to context-specific EntryAdapterProvider
+- `commandSourcedContextFor(contextName, config?)` - Now registers sources to context-specific EntryAdapterProvider
+
+### Changed
+
+- `EntryRegistry.register()` now delegates to `ContextProfile.forContext('default')`
+- `SourcedEntity.entryAdapterProvider()` now returns context-specific provider if available
+- `EntryAdapterProvider` constructor is now public for context-scoped instantiation
+- Added `EntryAdapterProvider.defaultProvider()` convenience method for accessing the default context's provider
+- Renamed `EntryAdapterProvider.getInstance()` to `EntryAdapterProvider.instance()`
+- Added `StateAdapterProvider.instance()` (`getInstance()` deprecated but available for backward compatibility)
+- `StateAdapterProvider` is now exported as a public API for custom state serialization
+
+### Renamed (from earlier 0.3.0 development)
+
+- `SourceConfig` → `SourceTypeSpec`
+- `ContextConfiguration` → `ContextSourceTypes`
+
+### Usage Examples
+
+**Simple Global Registration:**
+```typescript
+EntryRegistry.register(AccountOpened)
+EntryRegistry.register(FundsDeposited, { depositedAt: Source.asDate })
+```
+
+**Context-Scoped Registration (Fluent API):**
+```typescript
+ContextProfile.forContext('bank')
+  .register(AccountOpened)
+  .register(FundsDeposited, { depositedAt: Source.asDate })
+  .register(AccountClosed, { closedAt: Source.asDate })
+
+// Or with registerAll for simple types
+ContextProfile.forContext('bank')
+  .registerAll(AccountOpened, FundsTransferred)
+  .register(FundsDeposited, { depositedAt: Source.asDate })
+```
+
+**Context Factory with Sources:**
+```typescript
+const BankEventSourcedEntity = eventSourcedContextFor('bank', {
+  sources: [
+    { type: AccountOpened },
+    { type: FundsDeposited, transforms: { depositedAt: Source.asDate } }
+  ]
+})
+```
+
+**Test Isolation:**
+```typescript
+beforeEach(() => {
+  ContextProfile.reset()
+  EntryAdapterProvider.reset()
+})
+```
+
+### Documentation
+
+- Updated `docs/DomoTactical.md` with ContextProfile documentation
+- Added fluent API examples
+- Added test isolation workflow
+
 ## [0.2.0] - 2025-01-27
 
 ### Breaking Changes
@@ -58,14 +248,14 @@ const name = await reader.name()       // Promise<string>
 
 ### Added
 
-#### Bounded Context Support
+#### Context Support
 
-New factory functions to create bounded context-specific entity base classes:
+New factory functions to create context-specific entity base classes:
 
 ```typescript
 import { eventSourcedEntityTypeFor, commandSourcedEntityTypeFor } from 'domo-tactical/model/sourcing'
 
-// Create a base class for the "bank" bounded context
+// Create a base class for the "bank" context
 const BankEventSourcedEntity = eventSourcedEntityTypeFor('bank')
 const BankCommandSourcedEntity = commandSourcedEntityTypeFor('bank')
 
@@ -80,10 +270,10 @@ class TransferCoordinator extends BankCommandSourcedEntity {
 ```
 
 The `SourcedEntity` base class now includes:
-- `contextName()` - Override to specify bounded context (default: `'default'`)
+- `contextName()` - Override to specify context (default: `'default'`)
 - `journalKey()` - Returns `'domo-tactical:<contextName>.journal'`
 
-Register journals for bounded contexts:
+Register journals for contexts:
 ```typescript
 stage().registerValue('domo-tactical:bank.journal', journal)
 stage().registerValue('domo-tactical:bank.documentStore', documentStore)
@@ -153,7 +343,7 @@ private supervisorName(): string {
 - Updated `docs/DomoTactical.md` with:
   - Actor-based storage documentation
   - Custom supervisor usage
-  - Bounded context support
+  - Context support
   - TestSupervisor/TestJournalSupervisor documentation
   - Updated JournalReader interface (async methods)
   - Updated project structure
@@ -195,12 +385,12 @@ const pos = reader.position()
 const pos = await reader.position()
 ```
 
-#### 3. Register Journals for Bounded Contexts
+#### 3. Register Journals for Contexts
 
-If using bounded context-specific entities:
+If using context-specific entities:
 
 ```typescript
-// Create and register journal for your bounded context
+// Create and register journal for your context
 stage().registerValue('domo-tactical:mycontext.journal', journal)
 
 // Create entity using context-specific base class
