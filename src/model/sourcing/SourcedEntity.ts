@@ -14,6 +14,7 @@ import { Journal } from '../../store/journal/Journal'
 import { Result } from '../../store/Result'
 import { StorageException } from '../../store/StorageException'
 import { EntryAdapterProvider } from '../../store/EntryAdapterProvider'
+import { ContextProfile } from '../../store/ContextProfile'
 import { StateAdapterProvider } from '../../store/StateAdapterProvider'
 import { State } from '../../store/State'
 
@@ -59,6 +60,20 @@ export abstract class SourcedEntity<T> extends EntityActor {
    */
   protected journalKey(): string {
     return `domo-tactical:${this.contextName()}.journal`
+  }
+
+  /**
+   * Answer the EntryAdapterProvider for this bounded context.
+   * Returns the context-specific provider if registered via ContextProfile,
+   * otherwise falls back to the global singleton.
+   */
+  protected entryAdapterProvider(): EntryAdapterProvider {
+    const contextName = this.contextName()
+    const profile = ContextProfile.get(contextName)
+    if (profile) {
+      return profile.entryAdapterProvider()
+    }
+    return EntryAdapterProvider.instance()
   }
 
   /**
@@ -265,7 +280,7 @@ export abstract class SourcedEntity<T> extends EntityActor {
       }
 
       // Apply only entries AFTER the snapshot version
-      const provider = EntryAdapterProvider.getInstance()
+      const provider = this.entryAdapterProvider()
       const allSources = provider.asSources(stream.entries)
 
       // Filter out events at or before snapshot version
@@ -292,7 +307,7 @@ export abstract class SourcedEntity<T> extends EntityActor {
     }
 
     // Use StateAdapterProvider to convert raw State → concrete snapshot type
-    const provider = StateAdapterProvider.getInstance()
+    const provider = StateAdapterProvider.instance()
     const snapshot = provider.fromRawState(rawSnapshot, rawSnapshot.type)
 
     // Call the protected overridable method with the stream version
