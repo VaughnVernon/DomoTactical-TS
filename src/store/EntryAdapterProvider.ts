@@ -12,21 +12,36 @@ import { TextEntry } from './journal/TextEntry'
 import { EntryAdapter } from './EntryAdapter'
 import { DefaultTextEntryAdapter } from './DefaultTextEntryAdapter'
 import { Metadata } from './Metadata'
+// Note: Circular import with ContextProfile is safe because we only
+// access it at runtime inside defaultProvider(), not at module load time.
+import { ContextProfile } from './ContextProfile'
 
 /**
  * Registry for EntryAdapter instances.
  * Manages mapping from Source types to their adapters.
  * Provides default fallback to DefaultTextEntryAdapter.
  *
- * This is a singleton that holds all registered adapters and provides
- * conversion methods for the Journal to use.
+ * Can be used as a singleton via instance() or created per-context
+ * via ContextProfile. For simple registration of Source types, use
+ * EntryRegistry or ContextProfile instead:
+ *
+ * ```typescript
+ * // Global registration (uses default context)
+ * EntryRegistry.register(AccountOpened)
+ * EntryRegistry.register(FundsDeposited, { depositedAt: Source.asDate })
+ *
+ * // Context-scoped registration (recommended for test isolation)
+ * ContextProfile.forContext('bank')
+ *   .register(AccountOpened)
+ *   .register(FundsDeposited, { depositedAt: Source.asDate })
+ * ```
  *
  * @example
  * ```typescript
- * // Get the singleton instance
- * const provider = EntryAdapterProvider.getInstance()
+ * // Get the singleton instance (global fallback)
+ * const provider = EntryAdapterProvider.instance()
  *
- * // Register a custom adapter
+ * // Register a custom adapter (for advanced use cases)
  * provider.registerAdapter(AccountOpened, new AccountOpenedAdapter())
  *
  * // Convert Source to Entry (uses custom adapter if registered, default otherwise)
@@ -37,7 +52,7 @@ import { Metadata } from './Metadata'
  * ```
  */
 export class EntryAdapterProvider {
-  private static instance: EntryAdapterProvider | null = null
+  private static _instance: EntryAdapterProvider | null = null
 
   /** Map of Source type name to adapter */
   private readonly adapters = new Map<string, EntryAdapter<any, any>>()
@@ -46,9 +61,11 @@ export class EntryAdapterProvider {
   private readonly defaultAdapter = new DefaultTextEntryAdapter()
 
   /**
-   * Private constructor for singleton pattern.
+   * Construct a new EntryAdapterProvider.
+   * Use instance() for the singleton, or create instances via ContextProfile
+   * for context-scoped registration.
    */
-  private constructor() {}
+  constructor() {}
 
   /**
    * Get the singleton instance.
@@ -56,11 +73,11 @@ export class EntryAdapterProvider {
    *
    * @returns EntryAdapterProvider the singleton instance
    */
-  static getInstance(): EntryAdapterProvider {
-    if (!EntryAdapterProvider.instance) {
-      EntryAdapterProvider.instance = new EntryAdapterProvider()
+  static instance(): EntryAdapterProvider {
+    if (!EntryAdapterProvider._instance) {
+      EntryAdapterProvider._instance = new EntryAdapterProvider()
     }
-    return EntryAdapterProvider.instance
+    return EntryAdapterProvider._instance
   }
 
   /**
@@ -68,14 +85,35 @@ export class EntryAdapterProvider {
    * Clears all registered adapters.
    */
   static reset(): void {
-    EntryAdapterProvider.instance = null
+    EntryAdapterProvider._instance = null
+  }
+
+  /**
+   * Get the default context's EntryAdapterProvider.
+   * This is the provider used by EntryRegistry.register() and is the
+   * recommended way to access registered adapters in tests.
+   *
+   * @returns EntryAdapterProvider for the 'default' context
+   *
+   * @example
+   * ```typescript
+   * // Register using EntryRegistry
+   * EntryRegistry.register(AccountOpened)
+   *
+   * // Get the provider where it was registered
+   * const provider = EntryAdapterProvider.defaultProvider()
+   * expect(provider.hasAdapter(AccountOpened)).toBe(true)
+   * ```
+   */
+  static defaultProvider(): EntryAdapterProvider {
+    return ContextProfile.forContext('default').entryAdapterProvider()
   }
 
   /**
    * Register a custom adapter for a Source type.
    *
-   * Once registered, this adapter will be used for all conversions
-   * involving the specified Source type.
+   * For most use cases, prefer using EntryRegistry.register() instead,
+   * which provides a simpler API.
    *
    * @param sourceType the Source class constructor
    * @param adapter the adapter instance
@@ -83,7 +121,6 @@ export class EntryAdapterProvider {
    * @example
    * ```typescript
    * provider.registerAdapter(AccountOpened, new AccountOpenedAdapter())
-   * provider.registerAdapter(FundsDeposited, new FundsDepositedAdapter())
    * ```
    */
   registerAdapter<S extends Source<any>, E extends Entry<any>>(
