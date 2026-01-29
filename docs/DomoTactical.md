@@ -63,6 +63,11 @@ DomoTactical-TS/
 │   │   │   ├── JournalConsumerActor.ts
 │   │   │   ├── AppendResult.ts
 │   │   │   ├── Outcome.ts
+│   │   │   ├── StreamState.ts
+│   │   │   ├── StreamInfo.ts
+│   │   │   ├── TombstoneResult.ts
+│   │   │   ├── DeleteResult.ts
+│   │   │   ├── TruncateResult.ts
 │   │   │   └── index.ts
 │   │   ├── document/               # Document/key-value storage
 │   │   │   ├── inmemory/
@@ -81,7 +86,7 @@ DomoTactical-TS/
 │   │   │   ├── SourcedEntity.ts
 │   │   │   ├── EventSourcedEntity.ts
 │   │   │   ├── CommandSourcedEntity.ts
-│   │   │   ├── ContextualEntity.ts   # Bounded context factory functions
+│   │   │   ├── ContextualEntity.ts   # Context factory functions
 │   │   │   └── index.ts
 │   │   ├── projections/            # CQRS projection pipeline
 │   │   │   ├── Projectable.ts
@@ -213,8 +218,8 @@ Complex base class for all sourced entities.
 export abstract class SourcedEntity<T> extends EntityActor {
   protected readonly streamName: string
 
-  // Bounded context support
-  protected contextName(): string          // Override to specify bounded context (default: 'default')
+  // Context support
+  protected contextName(): string          // Override to specify context (default: 'default')
   protected journalKey(): string           // Returns 'domo-tactical:<contextName>.journal'
 
   // Register source consumers for state transitions
@@ -346,7 +351,8 @@ export enum Result {
   ConcurrencyViolation,
   NotFound,
   NotAllFound,
-  NoTypeStore
+  NoTypeStore,       // The document type/category itself doesn't exist
+  StreamDeleted      // Stream was tombstoned (hard deleted)
 }
 
 export class StorageException extends Error {
@@ -401,7 +407,91 @@ export interface Journal<T> {
   ): Promise<AppendResult<S, ST>>
 
   streamReader(name: string): Promise<StreamReader<T>>
+
+  // Stream Lifecycle Management
+  tombstone(streamName: string): Promise<TombstoneResult>
+  softDelete(streamName: string): Promise<DeleteResult>
+  truncateBefore(streamName: string, beforeVersion: number): Promise<TruncateResult>
+  streamInfo(streamName: string): Promise<StreamInfo>
 }
+```
+
+#### **Stream Lifecycle Management**
+
+The Journal interface provides stream lifecycle operations based on EventStoreDB/KurrentDB patterns.
+
+**Tombstone (Hard Delete):**
+```typescript
+// Permanently delete a stream - cannot be reopened
+const result = await journal.tombstone('user-123')
+if (result.isSuccess()) {
+  console.log(`Stream permanently deleted at position ${result.journalPosition}`)
+}
+// Subsequent appends will fail with Result.StreamDeleted
+// Reads will return EntryStream with isTombstoned=true
+```
+
+**Soft Delete:**
+```typescript
+// Mark stream as deleted, can be reopened
+const result = await journal.softDelete('order-456')
+
+// Events become invisible to reads
+const stream = await reader.streamFor('order-456')
+// stream.isSoftDeleted === true, stream.entries === []
+
+// Reopen by appending (version continues from where it left off)
+await journal.append('order-456', nextVersion, newEvent, metadata)
+```
+
+**Truncate Before:**
+```typescript
+// Hide events before a version (similar to EventStoreDB's $tb)
+await journal.truncateBefore('account-789', 100)
+
+// Subsequent reads only return events from version 100 onwards
+const stream = await reader.streamFor('account-789')
+// Only events with version >= 100 are included
+```
+
+**Stream Info:**
+```typescript
+const info = await journal.streamInfo('stream-name')
+
+if (!info.exists) {
+  console.log('Stream does not exist')
+} else if (info.isTombstoned) {
+  console.log('Stream has been permanently deleted')
+} else if (info.isSoftDeleted) {
+  console.log('Stream is soft-deleted but can be reopened')
+} else {
+  console.log(`Stream at version ${info.currentVersion}`)
+  console.log(`Visible entries: ${info.entryCount}`)
+  console.log(`Truncated before: ${info.truncateBefore}`)
+}
+```
+
+#### **Optimistic Concurrency with StreamState**
+
+Use `StreamState` enum values for optimistic concurrency control:
+
+```typescript
+import { StreamState } from 'domo-tactical'
+
+// Create new stream only (fails if stream exists)
+const result = await journal.append('new-stream', StreamState.NoStream, event, metadata)
+if (result.isConcurrencyViolation()) {
+  console.log('Stream already exists!')
+}
+
+// Append to existing stream only (fails if stream empty)
+await journal.append('existing-stream', StreamState.StreamExists, event, metadata)
+
+// Append regardless of version (disable concurrency check)
+await journal.append('any-stream', StreamState.Any, event, metadata)
+
+// Expect specific version (version 5 implies stream is at version 4)
+await journal.append('stream', 5, event, metadata)
 ```
 
 #### **AppendResult**
@@ -418,8 +508,10 @@ export class AppendResult<S, ST> {
     public readonly snapshot: ST | null
   )
 
-  isSuccess(): boolean
-  isFailure(): boolean
+  isSuccess(): boolean              // True only if result is Result.Success
+  isFailure(): boolean              // True for any non-success outcome
+  isConcurrencyViolation(): boolean // True if version mismatch
+  isStreamDeleted(): boolean        // True if stream was tombstoned
 }
 ```
 
@@ -543,8 +635,273 @@ class UserRegisteredAdapter implements EntryAdapter<UserRegistered, string> {
 }
 
 // Register adapter
-EntryAdapterProvider.getInstance()
+EntryAdapterProvider.instance()
   .registerAdapter(UserRegistered, new UserRegisteredAdapter())
+```
+
+#### **EntryRegistry - Simple Source Type Registration**
+
+The default `DefaultTextEntryAdapter` uses `JSON.parse()` which returns plain objects with `constructor === Object`. When `SourcedEntity.applySource()` looks up consumers via `source.constructor`, it fails because consumers are registered with specific class constructors (e.g., `AccountCreated`), not `Object`.
+
+`EntryRegistry` solves this with a simple registration API that works for any `Source<T>` type (DomainEvent, Command, etc.):
+
+**Simple Registration (no transforms needed)**
+
+```typescript
+// Register Source types for reconstruction
+EntryRegistry.register(AccountOpened)
+EntryRegistry.register(FundsDeposited)
+EntryRegistry.register(ProcessPayment)  // Commands work too
+```
+
+**With Date Transforms**
+
+For properties that need transformation (e.g., Date fields stored as strings):
+
+```typescript
+// Use Source.asDate for Date conversion
+EntryRegistry.register(OrderShipped, { shippedAt: Source.asDate })
+
+// Multiple Date fields
+EntryRegistry.register(TransferCompleted, {
+  initiatedAt: Source.asDate,
+  completedAt: Source.asDate
+})
+
+// Custom transforms
+EntryRegistry.register(OrderPlaced, {
+  amount: (v) => Math.round(Number(v) * 100)  // Convert to cents
+})
+```
+
+**Context Registration (all sources at once)**
+
+Register all sources when creating a context:
+
+```typescript
+const BankEventSourcedEntity = eventSourcedContextFor('bank', {
+  sources: [
+    { type: AccountOpened },
+    { type: FundsDeposited, transforms: { depositedAt: Source.asDate } },
+    { type: AccountClosed, transforms: { closedAt: Source.asDate } }
+  ]
+})
+
+class AccountActor extends BankEventSourcedEntity {
+  // All sources are automatically reconstructed when restoring from journal
+}
+```
+
+**Source Date Utilities**
+
+`Source<T>` provides built-in date conversion utilities:
+
+```typescript
+// Instance method - convert dateTimeSourced to Date
+const event = new AccountOpened('123', 'Alice', 1000)
+const createdAt = event.dateSourced()  // Date instance
+
+// Static helper - use as transform function
+EntryRegistry.register(OrderShipped, { shippedAt: Source.asDate })
+
+// Instance method - convert any property to Date
+const when = event.dateOf('occurredAt')  // Date instance
+```
+
+**Migration from Manual Adapters**
+
+Replace verbose adapter classes:
+
+```typescript
+// Before (50+ lines)
+class AccountOpenedAdapter extends DefaultTextEntryAdapter<AccountOpened> {
+  protected override upcastIfNeeded(data: any, type: string, version: number): AccountOpened {
+    return new AccountOpened(data.accountId, data.owner, data.initialBalance)
+  }
+}
+provider.registerAdapter(AccountOpened, new AccountOpenedAdapter())
+
+// After (1 line)
+EntryRegistry.register(AccountOpened)
+```
+
+#### **ContextProfile - Context-Scoped Registration**
+
+`ContextProfile` provides context-scoped Source registration with a fluent API. Each context gets its own `EntryAdapterProvider`, solving the singleton testing problem.
+
+**Types**
+
+- `SourceTypeSpec` - Configuration for a Source type with optional transforms:
+  ```typescript
+  interface SourceTypeSpec {
+    type: new (...args: unknown[]) => Source<unknown>
+    transforms?: PropertyTransforms
+  }
+  ```
+
+- `ContextSourceTypes` - Configuration for context factory functions:
+  ```typescript
+  interface ContextSourceTypes {
+    sources?: SourceTypeSpec[]
+  }
+  ```
+
+**Fluent Registration API**
+
+```typescript
+// Create and register sources for a context
+ContextProfile.forContext('bank')
+  .register(AccountOpened)
+  .register(FundsDeposited, { depositedAt: Source.asDate })
+  .register(AccountClosed, { closedAt: Source.asDate })
+
+// Or use registerAll for types without transforms
+ContextProfile.forContext('bank')
+  .registerAll(AccountOpened, FundsTransferred, AccountClosed)
+
+// Or use registerSources for batch registration
+ContextProfile.forContext('bank').registerSources([
+  { type: AccountOpened },
+  { type: FundsDeposited, transforms: { depositedAt: Source.asDate } }
+])
+```
+
+**Context Isolation**
+
+Each context has its own `EntryAdapterProvider`:
+
+```typescript
+// Bank context
+ContextProfile.forContext('bank')
+  .register(AccountOpened)
+
+// Order context (completely independent)
+ContextProfile.forContext('orders')
+  .register(OrderPlaced)
+
+// Get context-specific provider
+const bankProvider = ContextProfile.get('bank')!.entryAdapterProvider()
+const event = bankProvider.asSource<AccountOpened>(entry)
+```
+
+**Test Isolation**
+
+Use `ContextProfile.reset()` in test setup/teardown:
+
+```typescript
+beforeEach(() => {
+  ContextProfile.reset()
+  EntryAdapterProvider.reset()
+})
+
+afterEach(() => {
+  ContextProfile.reset()
+  EntryAdapterProvider.reset()
+})
+```
+
+**Integration with Context Factories**
+
+`eventSourcedContextFor()` and `commandSourcedContextFor()` automatically use `ContextProfile`:
+
+```typescript
+// Sources are registered to 'bank' context's EntryAdapterProvider
+const BankEntity = eventSourcedContextFor('bank', {
+  sources: [
+    { type: AccountOpened },
+    { type: FundsDeposited, transforms: { depositedAt: Source.asDate } }
+  ]
+})
+
+// Entity automatically uses context-specific provider during restore
+class AccountActor extends BankEntity {
+  // Sources reconstructed using ContextProfile.get('bank').entryAdapterProvider()
+}
+```
+
+**Global vs Context-Scoped**
+
+- `EntryRegistry.register()` → delegates to `ContextProfile.forContext('default')`
+- `ContextProfile.forContext(name)` → creates/gets context-specific profile
+- `SourcedEntity.entryAdapterProvider()` → returns context-specific provider if exists, otherwise global singleton
+- `EntryAdapterProvider.defaultProvider()` → convenience method to get the default context's provider
+
+```typescript
+// After registering with EntryRegistry
+EntryRegistry.register(AccountOpened)
+
+// Access the provider where it was registered
+const provider = EntryAdapterProvider.defaultProvider()
+expect(provider.hasAdapter(AccountOpened)).toBe(true)
+```
+
+#### **StateAdapterProvider - State Serialization Registry**
+
+`StateAdapterProvider` manages the serialization and deserialization of state objects for the DocumentStore. It provides a registry for custom state adapters and a default JSON-based serialization strategy.
+
+**Key Features:**
+- Singleton registry for state adapters
+- Custom adapter registration per state type
+- Default JSON serialization for unregistered types
+- Schema evolution support via adapter upcasting
+
+```typescript
+import { StateAdapterProvider } from 'domo-tactical'
+
+// Get the singleton instance
+const provider = StateAdapterProvider.instance()
+
+// Register a custom adapter for a state type
+provider.registerAdapter('AccountState', new AccountStateAdapter())
+
+// Check if adapter is registered
+if (provider.hasAdapter('AccountState')) {
+  console.log('Custom serialization for AccountState')
+}
+
+// Convert native state to raw State (used by DocumentStore.write())
+const rawState = provider.asRawState('account-123', accountState, 1, metadata)
+
+// Convert raw State back to native state (used by DocumentStore.read())
+const state = provider.fromRawState(rawState, 'AccountState')
+```
+
+**Test Isolation:**
+
+```typescript
+beforeEach(() => {
+  StateAdapterProvider.reset()  // Clear all registered adapters
+})
+```
+
+**Custom State Adapters:**
+
+For custom serialization or schema evolution, implement `StateAdapter<S, RS>`:
+
+```typescript
+import { StateAdapter, TextState, Metadata } from 'domo-tactical'
+
+class AccountStateAdapter implements StateAdapter<AccountState, TextState> {
+  toRawState(id: string, state: AccountState, stateVersion: number, metadata: Metadata): TextState {
+    return new TextState(id, JSON.stringify({
+      accountId: state.accountId,
+      balance: state.balance,
+      status: state.status
+    }), stateVersion, metadata, 'AccountState', 1)
+  }
+
+  fromRawState(raw: TextState): AccountState {
+    const data = JSON.parse(raw.data)
+    // Upcast from older versions if needed
+    if (raw.typeVersion === 1 && !data.status) {
+      data.status = 'active'  // Default for v1 → v2 migration
+    }
+    return new AccountState(data.accountId, data.balance, data.status)
+  }
+}
+
+// Register the adapter
+StateAdapterProvider.instance().registerAdapter('AccountState', new AccountStateAdapter())
 ```
 
 ### Document Store Components (`/src/store/document/`)
@@ -859,6 +1216,8 @@ import {
   // Store types
   Source, Metadata, State, Result, StorageException,
   BinaryState, TextState, ObjectState,
+  EntryAdapterProvider, StateAdapterProvider,
+  EntryRegistry, ContextProfile,
 
   // Journal types
   Journal, AppendResult, Entry, EntityStream, Outcome,
@@ -887,7 +1246,8 @@ import {
 import {
   Source, Metadata, State, Result, StorageException,
   BinaryState, TextState, ObjectState,
-  EntryAdapterProvider
+  EntryAdapterProvider, StateAdapterProvider,
+  EntryRegistry, ContextProfile
 } from 'domo-tactical/store'
 ```
 
@@ -1005,35 +1365,35 @@ const journal = stage().actorFor<Journal<string>>(journalProtocol, undefined, SU
 // JournalReader and StreamReader actors created by the journal will inherit this supervisor
 ```
 
-### Registering Storage for Bounded Contexts
+### Registering Storage for Contexts
 
-Sourced entities look up their journal using a bounded context key pattern:
+Sourced entities look up their journal using a context key pattern:
 
 ```
 domo-tactical:<contextName>.journal
 domo-tactical:<contextName>.documentStore
 ```
 
-Register storage for a bounded context:
+Register storage for a context:
 
 ```typescript
-// Register journal for the "bank" bounded context
+// Register journal for the "bank" context
 stage().registerValue('domo-tactical:bank.journal', journal)
 
-// Register document store for the "bank" bounded context
+// Register document store for the "bank" context
 stage().registerValue('domo-tactical:bank.documentStore', documentStore)
 ```
 
-## Bounded Context Support
+## Context Support
 
 ### Context-Specific Entity Base Classes
 
-Use factory functions to create bounded-context-specific entity base classes:
+Use factory functions to create context-specific entity base classes:
 
 ```typescript
 import { eventSourcedEntityTypeFor, commandSourcedEntityTypeFor } from 'domo-tactical/model/sourcing'
 
-// Create a base class for the "bank" bounded context
+// Create a base class for the "bank" context
 const BankEventSourcedEntity = eventSourcedEntityTypeFor('bank')
 
 // Use it as the base for your entity
@@ -1052,11 +1412,11 @@ class TransferCoordinator extends BankCommandSourcedEntity {
 
 ### The `contextName()` Method
 
-The `SourcedEntity` base class provides a `contextName()` method that returns the bounded context name. By default it returns `'default'`:
+The `SourcedEntity` base class provides a `contextName()` method that returns the context name. By default it returns `'default'`:
 
 ```typescript
 export abstract class SourcedEntity<T> extends EntityActor {
-  // Override to specify your bounded context
+  // Override to specify your context
   protected contextName(): string {
     return 'default'
   }
@@ -1070,13 +1430,13 @@ export abstract class SourcedEntity<T> extends EntityActor {
 
 The factory functions (`eventSourcedEntityTypeFor`, `commandSourcedEntityTypeFor`) create subclasses that override `contextName()` to return the specified context name.
 
-### Complete Bounded Context Example
+### Complete Context Example
 
 ```typescript
 import { stage, Protocol } from 'domo-actors'
 import { eventSourcedEntityTypeFor, DomainEvent, InMemoryJournal, Journal } from 'domo-tactical'
 
-// 1. Create the bounded context base class
+// 1. Create the context base class
 const BankEventSourcedEntity = eventSourcedEntityTypeFor('bank')
 
 // 2. Define your domain events
@@ -1085,7 +1445,7 @@ class AccountOpened extends DomainEvent {
   override id() { return this.accountId }
 }
 
-// 3. Define your entity using the bounded context base
+// 3. Define your entity using the context base
 class AccountActor extends BankEventSourcedEntity {
   private balance = 0
 
@@ -1106,7 +1466,7 @@ const journalProtocol: Protocol = {
 }
 const journal = stage().actorFor<Journal<string>>(journalProtocol, undefined, 'default')
 
-// 5. Register journal for the bounded context
+// 5. Register journal for the context
 stage().registerValue('domo-tactical:bank.journal', journal)
 
 // 6. Create entities as actors - they will automatically find their journal
@@ -1366,8 +1726,10 @@ export class AppendResult<S, ST> {
   sources: Source<S>[] | null
   snapshot: ST | null
 
-  isSuccess(): boolean
-  isFailure(): boolean
+  isSuccess(): boolean              // True only if result is Result.Success
+  isFailure(): boolean              // True for any non-success outcome
+  isConcurrencyViolation(): boolean // True if version mismatch
+  isStreamDeleted(): boolean        // True if stream was tombstoned
 }
 ```
 
@@ -1379,7 +1741,7 @@ export class AppendResult<S, ST> {
 - Null handling without Java's Optional
 
 ### 4. DomoActors Integration
-EntityActor extends Actor from domo-actors@1.0.2:
+EntityActor extends Actor from domo-actors@1.2.0:
 
 ```typescript
 import { Actor } from 'domo-actors'
@@ -1406,7 +1768,7 @@ private sourceToEntry<S>(source: Source<S>, ...): Entry<T> {
 
 ## Testing
 
-The project includes comprehensive tests using Vitest (177 tests passing):
+The project includes comprehensive tests using Vitest (284 tests passing):
 
 ```bash
 npm test              # Run tests once
@@ -1505,7 +1867,7 @@ npm publish        # Publish to npm
 
 ## Dependencies
 
-- **domo-actors@^1.0.2** - Actor model foundation
+- **domo-actors@^1.2.0** - Actor model foundation
 
 ### Development
 - **typescript@^5.7.2** - TypeScript compiler
