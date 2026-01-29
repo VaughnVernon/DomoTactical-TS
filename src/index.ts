@@ -16,7 +16,13 @@ export {
   ObjectState,
   Result,
   StorageException,
+  EntryAdapterProvider,
+  DefaultTextEntryAdapter,
+  EntryRegistry,
+  ContextProfile,
 } from './store'
+
+export type { PropertyTransforms, SourceTypeSpec } from './store'
 
 export type { Journal, StreamReader, JournalReader, Entry, JournalConsumer } from './store/journal'
 export {
@@ -56,7 +62,11 @@ export {
   CommandSourcedEntity,
   eventSourcedEntityTypeFor,
   commandSourcedEntityTypeFor,
+  eventSourcedContextFor,
+  commandSourcedContextFor,
 } from './model/sourcing'
+
+export type { ContextSourceTypes } from './model/sourcing'
 
 // Projection exports
 export type { Projectable, Projection, ProjectionControl, Confirmer, ProjectionDispatcher } from './model/projections'

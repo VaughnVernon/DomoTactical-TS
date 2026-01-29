@@ -95,7 +95,7 @@ describe('CQRS Projection Pipeline Integration', () => {
     stage().registerValue('domo-tactical:test.documentStore', documentStore)
 
     // Register custom adapters
-    const adapterProvider = EntryAdapterProvider.getInstance()
+    const adapterProvider = EntryAdapterProvider.instance()
     adapterProvider.registerAdapter(UserRegistered, new UserRegisteredAdapter())
     adapterProvider.registerAdapter(UserAuthenticated, new UserAuthenticatedAdapter())
     adapterProvider.registerAdapter(UserDeactivated, new UserDeactivatedAdapter())
@@ -207,7 +207,7 @@ describe('CQRS Projection Pipeline Integration', () => {
     stage().deregisterValue('domo-tactical:test.documentStore')
     await stage().close()
     // Clean up singleton
-    ;(EntryAdapterProvider as any).instance = undefined
+    EntryAdapterProvider.reset()
   })
 
   it('should project UserRegistered events to UserProfile', async () => {

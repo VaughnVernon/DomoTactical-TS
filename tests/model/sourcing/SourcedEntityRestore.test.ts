@@ -225,13 +225,13 @@ describe('SourcedEntity Restoration', () => {
     StateAdapterProvider.reset()
 
     // Register custom adapters for test events
-    const entryProvider = EntryAdapterProvider.getInstance()
+    const entryProvider = EntryAdapterProvider.instance()
     entryProvider.registerAdapter(AccountCreated, new AccountCreatedAdapter())
     entryProvider.registerAdapter(BalanceAdjusted, new BalanceAdjustedAdapter())
     entryProvider.registerAdapter(AccountClosed, new AccountClosedAdapter())
 
     // Register state adapter for snapshots
-    const stateProvider = StateAdapterProvider.getInstance()
+    const stateProvider = StateAdapterProvider.instance()
     stateProvider.registerAdapter('Object', new TestAccountSnapshotAdapter())
 
     // Initialize supervisor

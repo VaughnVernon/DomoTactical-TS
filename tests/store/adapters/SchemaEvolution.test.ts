@@ -26,14 +26,14 @@ describe('Schema Evolution and Upcasting', () => {
   let provider: EntryAdapterProvider
 
   beforeEach(() => {
-    provider = EntryAdapterProvider.getInstance()
+    provider = EntryAdapterProvider.instance()
     provider.registerAdapter(UserRegistered, new UserRegisteredAdapter())
     provider.registerAdapter(UserAuthenticated, new UserAuthenticatedAdapter())
   })
 
   afterEach(() => {
     // Clean up singleton instance
-    ;(EntryAdapterProvider as any).instance = undefined
+    EntryAdapterProvider.reset()
   })
 
   describe('UserRegistered Event Evolution', () => {

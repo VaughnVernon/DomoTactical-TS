@@ -47,7 +47,7 @@ describe('EntryAdapterProvider', () => {
   beforeEach(() => {
     // Reset singleton before each test
     EntryAdapterProvider.reset()
-    provider = EntryAdapterProvider.getInstance()
+    provider = EntryAdapterProvider.instance()
   })
 
   afterEach(() => {
@@ -57,16 +57,16 @@ describe('EntryAdapterProvider', () => {
 
   describe('singleton pattern', () => {
     it('should return the same instance on multiple calls', () => {
-      const instance1 = EntryAdapterProvider.getInstance()
-      const instance2 = EntryAdapterProvider.getInstance()
+      const instance1 = EntryAdapterProvider.instance()
+      const instance2 = EntryAdapterProvider.instance()
 
       expect(instance1).toBe(instance2)
     })
 
     it('should create new instance after reset', () => {
-      const instance1 = EntryAdapterProvider.getInstance()
+      const instance1 = EntryAdapterProvider.instance()
       EntryAdapterProvider.reset()
-      const instance2 = EntryAdapterProvider.getInstance()
+      const instance2 = EntryAdapterProvider.instance()
 
       expect(instance1).not.toBe(instance2)
     })

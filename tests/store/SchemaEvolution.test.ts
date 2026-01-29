@@ -123,7 +123,7 @@ describe('Schema Evolution with Adapters', () => {
 
   beforeEach(() => {
     EntryAdapterProvider.reset()
-    provider = EntryAdapterProvider.getInstance()
+    provider = EntryAdapterProvider.instance()
 
     // Register custom adapters
     provider.registerAdapter(UserRegistered, new UserRegisteredAdapter())

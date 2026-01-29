@@ -9,4 +9,10 @@
 export { SourcedEntity } from './SourcedEntity'
 export { EventSourcedEntity } from './EventSourcedEntity'
 export { CommandSourcedEntity } from './CommandSourcedEntity'
-export { eventSourcedEntityTypeFor, commandSourcedEntityTypeFor } from './ContextualEntity'
+export {
+  eventSourcedEntityTypeFor,
+  commandSourcedEntityTypeFor,
+  eventSourcedContextFor,
+  commandSourcedContextFor,
+  type ContextSourceTypes
+} from './ContextualEntity'
