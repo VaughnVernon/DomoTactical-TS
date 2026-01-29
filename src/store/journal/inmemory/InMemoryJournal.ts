@@ -46,7 +46,7 @@ export class InMemoryJournal<T> extends Actor implements Journal<T> {
   private nextEntryId = 1
 
   /** Adapter provider for Source/Entry conversion */
-  private readonly adapterProvider = EntryAdapterProvider.getInstance()
+  private readonly adapterProvider = EntryAdapterProvider.instance()
 
   /**
    * Construct an InMemoryJournal.
