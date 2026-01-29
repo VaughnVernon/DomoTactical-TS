@@ -81,11 +81,73 @@ export abstract class Source<T> {
   }
 
   /**
+   * Convert a timestamp (milliseconds since epoch) or ISO string to a Date.
+   * Useful as a transform function in EntryRegistry.register().
+   *
+   * @param value the timestamp as number (millis) or string (ISO format)
+   * @returns Date the converted Date instance
+   *
+   * @example
+   * ```typescript
+   * // Use as a transform in EntryRegistry
+   * EntryRegistry.register(FundsDeposited, { depositedAt: Source.asDate })
+   *
+   * // Direct usage
+   * const date = Source.asDate(1706123456789)
+   * const date2 = Source.asDate('2025-01-15T10:30:00.000Z')
+   * ```
+   */
+  static asDate(value: number | string): Date {
+    return new Date(value)
+  }
+
+  /**
    * Answer my id as a string. By default my id is empty. Override to provide an actual id.
    * @returns string
    */
   id(): string {
     return ''
+  }
+
+  /**
+   * Answer the dateTimeSourced as a Date instance.
+   *
+   * @returns Date the timestamp when this source was created
+   *
+   * @example
+   * ```typescript
+   * const event = new AccountOpened('123', 'Alice', 1000)
+   * const createdAt = event.dateSourced()  // Date instance
+   * ```
+   */
+  dateSourced(): Date {
+    return new Date(this.dateTimeSourced)
+  }
+
+  /**
+   * Answer a property value as a Date.
+   * Useful for accessing timestamp properties stored as numbers or strings.
+   *
+   * @param propertyName the name of the property containing a timestamp
+   * @returns Date the property value converted to a Date
+   * @throws Error if the property doesn't exist or is null/undefined
+   *
+   * @example
+   * ```typescript
+   * class FundsDeposited extends DomainEvent {
+   *   constructor(public accountId: string, public depositedAt: number) { super() }
+   * }
+   *
+   * const event = new FundsDeposited('123', Date.now())
+   * const when = event.dateOf('depositedAt')  // Date instance
+   * ```
+   */
+  dateOf(propertyName: string): Date {
+    const value = (this as Record<string, unknown>)[propertyName]
+    if (value === undefined || value === null) {
+      throw new Error(`Property '${propertyName}' is undefined or null`)
+    }
+    return new Date(value as number | string)
   }
 
   /**
