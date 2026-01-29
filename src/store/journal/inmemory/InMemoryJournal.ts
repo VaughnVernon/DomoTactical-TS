@@ -12,10 +12,15 @@ import { Result } from '../../Result'
 import { Source } from '../../Source'
 import { State, ObjectState } from '../../State'
 import { AppendResult, Journal, StreamReader } from '../Journal'
+import { DeleteResult } from '../DeleteResult'
 import { Entry } from '../Entry'
 import { EntryStream } from '../EntryStream'
 import { JournalReader } from '../JournalReader'
 import { Outcome } from '../Outcome'
+import { StreamInfo, DefaultStreamInfo } from '../StreamInfo'
+import { StreamState } from '../StreamState'
+import { TombstoneResult } from '../TombstoneResult'
+import { TruncateResult } from '../TruncateResult'
 import { InMemoryJournalReader } from './InMemoryJournalReader'
 import { EntryAdapterProvider } from '../../EntryAdapterProvider'
 
@@ -42,6 +47,15 @@ export class InMemoryJournal<T> extends Actor implements Journal<T> {
   /** Map of journal reader names to readers */
   private readonly journalReaders: Map<string, InMemoryJournalReader<T>> = new Map()
 
+  /** Set of tombstoned (hard deleted) stream names */
+  private readonly tombstones: Set<string> = new Set()
+
+  /** Map of soft-deleted stream names to the version at which they were deleted */
+  private readonly softDeleted: Map<string, number> = new Map()
+
+  /** Map of stream names to their truncate-before position */
+  private readonly truncateBeforeMap: Map<string, number> = new Map()
+
   /** Next entry ID counter */
   private nextEntryId = 1
 
@@ -64,11 +78,29 @@ export class InMemoryJournal<T> extends Actor implements Journal<T> {
     source: Source<S>,
     metadata: Metadata
   ): Promise<AppendResult<S, ST>> {
-    const entry = this.sourceToEntry(source, streamVersion, metadata)
-    this.insert(streamName, streamVersion, entry)
+    // Check for tombstone
+    if (this.tombstones.has(streamName)) {
+      const outcome = Outcome.success<never, Result>(Result.StreamDeleted)
+      return AppendResult.forSource<S, ST>(outcome, streamName, streamVersion, source, null)
+    }
+
+    // Validate expected version
+    const validationResult = this.validateExpectedVersion(streamName, streamVersion)
+    if (validationResult !== null) {
+      return AppendResult.forSource<S, ST>(validationResult, streamName, streamVersion, source, null)
+    }
+
+    // Clear soft-delete if reopening
+    if (this.softDeleted.has(streamName)) {
+      this.softDeleted.delete(streamName)
+    }
+
+    const actualVersion = this.resolveActualVersion(streamName, streamVersion)
+    const entry = this.sourceToEntry(source, actualVersion, metadata)
+    this.insert(streamName, actualVersion, entry)
 
     const outcome = Outcome.success<never, Result>(Result.Success)
-    return AppendResult.forSource<S, ST>(outcome, streamName, streamVersion, source, null)
+    return AppendResult.forSource<S, ST>(outcome, streamName, actualVersion, source, null)
   }
 
   /**
@@ -81,8 +113,26 @@ export class InMemoryJournal<T> extends Actor implements Journal<T> {
     metadata: Metadata,
     snapshot: ST
   ): Promise<AppendResult<S, ST>> {
-    const entry = this.sourceToEntry(source, streamVersion, metadata)
-    this.insert(streamName, streamVersion, entry)
+    // Check for tombstone
+    if (this.tombstones.has(streamName)) {
+      const outcome = Outcome.success<never, Result>(Result.StreamDeleted)
+      return AppendResult.forSource<S, ST>(outcome, streamName, streamVersion, source, snapshot)
+    }
+
+    // Validate expected version
+    const validationResult = this.validateExpectedVersion(streamName, streamVersion)
+    if (validationResult !== null) {
+      return AppendResult.forSource<S, ST>(validationResult, streamName, streamVersion, source, snapshot)
+    }
+
+    // Clear soft-delete if reopening
+    if (this.softDeleted.has(streamName)) {
+      this.softDeleted.delete(streamName)
+    }
+
+    const actualVersion = this.resolveActualVersion(streamName, streamVersion)
+    const entry = this.sourceToEntry(source, actualVersion, metadata)
+    this.insert(streamName, actualVersion, entry)
 
     if (snapshot != null) {
       // Wrap snapshot in a simple State if it's not already one
@@ -90,13 +140,13 @@ export class InMemoryJournal<T> extends Actor implements Journal<T> {
         this.snapshots.set(streamName, snapshot as State<unknown>)
       } else {
         // Wrap in ObjectState
-        const objectState = new ObjectState(streamName, Object, 1, snapshot, streamVersion)
+        const objectState = new ObjectState(streamName, Object, 1, snapshot, actualVersion)
         this.snapshots.set(streamName, objectState)
       }
     }
 
     const outcome = Outcome.success<never, Result>(Result.Success)
-    return AppendResult.forSource(outcome, streamName, streamVersion, source, snapshot)
+    return AppendResult.forSource(outcome, streamName, actualVersion, source, snapshot)
   }
 
   /**
@@ -108,16 +158,35 @@ export class InMemoryJournal<T> extends Actor implements Journal<T> {
     sources: Source<S>[],
     metadata: Metadata
   ): Promise<AppendResult<S, ST>> {
+    // Check for tombstone
+    if (this.tombstones.has(streamName)) {
+      const outcome = Outcome.success<never, Result>(Result.StreamDeleted)
+      return AppendResult.forSources<S, ST>(outcome, streamName, fromStreamVersion, sources, null)
+    }
+
+    // Validate expected version
+    const validationResult = this.validateExpectedVersion(streamName, fromStreamVersion)
+    if (validationResult !== null) {
+      return AppendResult.forSources<S, ST>(validationResult, streamName, fromStreamVersion, sources, null)
+    }
+
+    // Clear soft-delete if reopening
+    if (this.softDeleted.has(streamName)) {
+      this.softDeleted.delete(streamName)
+    }
+
+    const actualFromVersion = this.resolveActualVersion(streamName, fromStreamVersion)
     const entries = sources.map((source, index) =>
-      this.sourceToEntry(source, fromStreamVersion + index, metadata)
+      this.sourceToEntry(source, actualFromVersion + index, metadata)
     )
 
     entries.forEach((entry, index) => {
-      this.insert(streamName, fromStreamVersion + index, entry)
+      this.insert(streamName, actualFromVersion + index, entry)
     })
 
+    const finalVersion = sources.length > 0 ? actualFromVersion + sources.length - 1 : actualFromVersion - 1
     const outcome = Outcome.success<never, Result>(Result.Success)
-    return AppendResult.forSources<S, ST>(outcome, streamName, fromStreamVersion + sources.length - 1, sources, null)
+    return AppendResult.forSources<S, ST>(outcome, streamName, finalVersion, sources, null)
   }
 
   /**
@@ -130,13 +199,33 @@ export class InMemoryJournal<T> extends Actor implements Journal<T> {
     metadata: Metadata,
     snapshot: ST
   ): Promise<AppendResult<S, ST>> {
+    // Check for tombstone
+    if (this.tombstones.has(streamName)) {
+      const outcome = Outcome.success<never, Result>(Result.StreamDeleted)
+      return AppendResult.forSources<S, ST>(outcome, streamName, fromStreamVersion, sources, snapshot)
+    }
+
+    // Validate expected version
+    const validationResult = this.validateExpectedVersion(streamName, fromStreamVersion)
+    if (validationResult !== null) {
+      return AppendResult.forSources<S, ST>(validationResult, streamName, fromStreamVersion, sources, snapshot)
+    }
+
+    // Clear soft-delete if reopening
+    if (this.softDeleted.has(streamName)) {
+      this.softDeleted.delete(streamName)
+    }
+
+    const actualFromVersion = this.resolveActualVersion(streamName, fromStreamVersion)
     const entries = sources.map((source, index) =>
-      this.sourceToEntry(source, fromStreamVersion + index, metadata)
+      this.sourceToEntry(source, actualFromVersion + index, metadata)
     )
 
     entries.forEach((entry, index) => {
-      this.insert(streamName, fromStreamVersion + index, entry)
+      this.insert(streamName, actualFromVersion + index, entry)
     })
+
+    const finalVersion = sources.length > 0 ? actualFromVersion + sources.length - 1 : actualFromVersion - 1
 
     if (snapshot != null) {
       // Wrap snapshot in a simple State if it's not already one
@@ -144,13 +233,13 @@ export class InMemoryJournal<T> extends Actor implements Journal<T> {
         this.snapshots.set(streamName, snapshot as State<unknown>)
       } else {
         // Wrap in ObjectState
-        const objectState = new ObjectState(streamName, Object, 1, snapshot, fromStreamVersion + sources.length - 1)
+        const objectState = new ObjectState(streamName, Object, 1, snapshot, finalVersion)
         this.snapshots.set(streamName, objectState)
       }
     }
 
     const outcome = Outcome.success<never, Result>(Result.Success)
-    return AppendResult.forSources(outcome, streamName, fromStreamVersion + sources.length - 1, sources, snapshot)
+    return AppendResult.forSources(outcome, streamName, finalVersion, sources, snapshot)
   }
 
   /**
@@ -164,8 +253,8 @@ export class InMemoryJournal<T> extends Actor implements Journal<T> {
         type: () => 'StreamReader',
         instantiator: () => ({
           instantiate: (def: Definition) => {
-            const [journalEntries, indexes, snaps, readerName] = def.parameters()
-            return new InMemoryStreamReader(journalEntries, indexes, snaps, readerName)
+            const [journalEntries, indexes, snaps, tombstoneSet, softDeletedMap, truncateMap, readerName] = def.parameters()
+            return new InMemoryStreamReader(journalEntries, indexes, snaps, tombstoneSet, softDeletedMap, truncateMap, readerName)
           }
         })
       }
@@ -178,6 +267,9 @@ export class InMemoryJournal<T> extends Actor implements Journal<T> {
         this.journal,
         this.streamIndexes,
         this.snapshots,
+        this.tombstones,
+        this.softDeleted,
+        this.truncateBeforeMap,
         name
       )
       this.streamReaders.set(name, reader)
@@ -214,6 +306,128 @@ export class InMemoryJournal<T> extends Actor implements Journal<T> {
     }
     return reader
   }
+
+  // ============================================================================
+  // Stream Lifecycle Management
+  // ============================================================================
+
+  /**
+   * Permanently delete a stream (tombstone).
+   */
+  async tombstone(streamName: string): Promise<TombstoneResult> {
+    // Already tombstoned
+    if (this.tombstones.has(streamName)) {
+      return TombstoneResult.alreadyTombstoned(streamName)
+    }
+
+    // Check if stream exists
+    const versionIndexes = this.streamIndexes.get(streamName)
+    if (!versionIndexes || versionIndexes.size === 0) {
+      return TombstoneResult.notFound(streamName)
+    }
+
+    // Mark as tombstoned
+    this.tombstones.add(streamName)
+
+    // Clear soft-delete if present
+    this.softDeleted.delete(streamName)
+
+    // Record the journal position (current length)
+    const journalPosition = this.journal.length
+
+    return TombstoneResult.success(streamName, journalPosition)
+  }
+
+  /**
+   * Soft-delete a stream.
+   */
+  async softDelete(streamName: string): Promise<DeleteResult> {
+    // Check if tombstoned
+    if (this.tombstones.has(streamName)) {
+      return DeleteResult.tombstoned(streamName)
+    }
+
+    // Check if already soft-deleted
+    const existingDeletedAt = this.softDeleted.get(streamName)
+    if (existingDeletedAt !== undefined) {
+      return DeleteResult.alreadyDeleted(streamName, existingDeletedAt)
+    }
+
+    // Check if stream exists
+    const versionIndexes = this.streamIndexes.get(streamName)
+    if (!versionIndexes || versionIndexes.size === 0) {
+      return DeleteResult.notFound(streamName)
+    }
+
+    // Get current version
+    const currentVersion = this.getCurrentVersion(streamName)
+
+    // Mark as soft-deleted
+    this.softDeleted.set(streamName, currentVersion)
+
+    return DeleteResult.success(streamName, currentVersion)
+  }
+
+  /**
+   * Set the truncate-before position for a stream.
+   */
+  async truncateBefore(streamName: string, beforeVersion: number): Promise<TruncateResult> {
+    // Check if tombstoned
+    if (this.tombstones.has(streamName)) {
+      return TruncateResult.tombstoned(streamName)
+    }
+
+    // Check if stream exists
+    const versionIndexes = this.streamIndexes.get(streamName)
+    if (!versionIndexes || versionIndexes.size === 0) {
+      return TruncateResult.notFound(streamName)
+    }
+
+    // Set truncate-before position
+    this.truncateBeforeMap.set(streamName, beforeVersion)
+
+    return TruncateResult.success(streamName, beforeVersion)
+  }
+
+  /**
+   * Get information about a stream's current state.
+   */
+  async streamInfo(streamName: string): Promise<StreamInfo> {
+    // Check if tombstoned
+    if (this.tombstones.has(streamName)) {
+      const currentVersion = this.getCurrentVersion(streamName)
+      return DefaultStreamInfo.tombstoned(streamName, currentVersion)
+    }
+
+    // Check if soft-deleted
+    const deletedAtVersion = this.softDeleted.get(streamName)
+    if (deletedAtVersion !== undefined) {
+      return DefaultStreamInfo.softDeleted(streamName, deletedAtVersion)
+    }
+
+    // Check if stream exists
+    const versionIndexes = this.streamIndexes.get(streamName)
+    if (!versionIndexes || versionIndexes.size === 0) {
+      return DefaultStreamInfo.notFound(streamName)
+    }
+
+    const currentVersion = this.getCurrentVersion(streamName)
+    const truncateBefore = this.truncateBeforeMap.get(streamName) || 0
+
+    // Count visible entries
+    let entryCount = 0
+    for (const version of versionIndexes.keys()) {
+      if (version >= truncateBefore) {
+        entryCount++
+      }
+    }
+
+    return DefaultStreamInfo.active(streamName, currentVersion, truncateBefore, entryCount)
+  }
+
+  // ============================================================================
+  // Private Helper Methods
+  // ============================================================================
 
   /**
    * Answer this actor's supervisor name, so child actors can use the same supervisor.
@@ -252,6 +466,69 @@ export class InMemoryJournal<T> extends Actor implements Journal<T> {
     }
     versionIndexes.set(streamVersion, entryIndex)
   }
+
+  /**
+   * Get the current (highest) version of a stream.
+   */
+  private getCurrentVersion(streamName: string): number {
+    const versionIndexes = this.streamIndexes.get(streamName)
+    if (!versionIndexes || versionIndexes.size === 0) {
+      return 0
+    }
+    return Math.max(...versionIndexes.keys())
+  }
+
+  /**
+   * Validate expected version for optimistic concurrency.
+   * Returns null if valid, or an Outcome with the error result.
+   */
+  private validateExpectedVersion(streamName: string, expectedVersion: number): Outcome<never, Result> | null {
+    const currentVersion = this.getCurrentVersion(streamName)
+
+    // StreamState.Any (-2) = skip check
+    if (StreamState.isAny(expectedVersion)) {
+      return null
+    }
+
+    // StreamState.NoStream (-1) = must not exist
+    if (StreamState.isNoStream(expectedVersion)) {
+      if (currentVersion > 0) {
+        return Outcome.success(Result.ConcurrencyViolation)
+      }
+      return null
+    }
+
+    // StreamState.StreamExists (-4) = must exist (any version)
+    if (StreamState.isStreamExists(expectedVersion)) {
+      if (currentVersion === 0) {
+        return Outcome.success(Result.ConcurrencyViolation)
+      }
+      return null
+    }
+
+    // Concrete version check
+    if (StreamState.isConcreteVersion(expectedVersion)) {
+      // For new streams, expectedVersion should be 1
+      // For existing streams, expectedVersion should be currentVersion + 1
+      const expectedCurrentVersion = expectedVersion - 1
+      if (expectedCurrentVersion !== currentVersion) {
+        return Outcome.success(Result.ConcurrencyViolation)
+      }
+    }
+
+    return null
+  }
+
+  /**
+   * Resolve the actual version to use for append.
+   * For special states, calculate the next version automatically.
+   */
+  private resolveActualVersion(streamName: string, expectedVersion: number): number {
+    if (StreamState.isSpecialState(expectedVersion)) {
+      return this.getCurrentVersion(streamName) + 1
+    }
+    return expectedVersion
+  }
 }
 
 /**
@@ -262,18 +539,27 @@ class InMemoryStreamReader<T> extends Actor implements StreamReader<T> {
   private readonly journalEntries: Entry<T>[]
   private readonly streamIndexes: Map<string, Map<number, number>>
   private readonly snapshotStore: Map<string, State<unknown>>
+  private readonly tombstones: Set<string>
+  private readonly softDeleted: Map<string, number>
+  private readonly truncateBeforeMap: Map<string, number>
   private readonly readerName: string
 
   constructor(
     journal: Entry<T>[],
     streamIndexes: Map<string, Map<number, number>>,
     snapshots: Map<string, State<unknown>>,
+    tombstones: Set<string>,
+    softDeleted: Map<string, number>,
+    truncateBeforeMap: Map<string, number>,
     name: string
   ) {
     super()
     this.journalEntries = journal
     this.streamIndexes = streamIndexes
     this.snapshotStore = snapshots
+    this.tombstones = tombstones
+    this.softDeleted = softDeleted
+    this.truncateBeforeMap = truncateBeforeMap
     this.readerName = name
   }
 
@@ -281,18 +567,34 @@ class InMemoryStreamReader<T> extends Actor implements StreamReader<T> {
    * Read the stream for the given stream name.
    */
   async streamFor(streamName: string): Promise<EntryStream<T>> {
+    // Check if tombstoned
+    if (this.tombstones.has(streamName)) {
+      const currentVersion = this.getMaxVersion(streamName)
+      return EntryStream.tombstoned<T>(streamName, currentVersion)
+    }
+
+    // Check if soft-deleted
+    const deletedAtVersion = this.softDeleted.get(streamName)
+    if (deletedAtVersion !== undefined) {
+      return EntryStream.softDeleted<T>(streamName, deletedAtVersion)
+    }
+
     const versionIndexes = this.streamIndexes.get(streamName)
     if (!versionIndexes || versionIndexes.size === 0) {
       // Return empty stream
-      return new EntryStream(streamName, 0, [], null)
+      return EntryStream.empty<T>(streamName)
     }
 
-    // Get all entries for this stream in order
+    const truncateBefore = this.truncateBeforeMap.get(streamName) || 0
+
+    // Get all entries for this stream in order, respecting truncate-before
     const entries: Entry<T>[] = []
     let maxVersion = 0
 
     for (const [version, index] of versionIndexes.entries()) {
-      entries.push(this.journalEntries[index])
+      if (version >= truncateBefore) {
+        entries.push(this.journalEntries[index])
+      }
       maxVersion = Math.max(maxVersion, version)
     }
 
@@ -305,6 +607,17 @@ class InMemoryStreamReader<T> extends Actor implements StreamReader<T> {
 
     const snapshot = this.snapshotStore.get(streamName) || null
 
-    return new EntryStream(streamName, maxVersion, entries, snapshot)
+    return new EntryStream(streamName, maxVersion, entries, snapshot, false, false)
+  }
+
+  /**
+   * Get the maximum version of a stream.
+   */
+  private getMaxVersion(streamName: string): number {
+    const versionIndexes = this.streamIndexes.get(streamName)
+    if (!versionIndexes || versionIndexes.size === 0) {
+      return 0
+    }
+    return Math.max(...versionIndexes.keys())
   }
 }

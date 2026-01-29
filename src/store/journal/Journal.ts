@@ -11,9 +11,13 @@ import { Metadata } from '../Metadata'
 import { Result } from '../Result'
 import { Source } from '../Source'
 import { StorageException } from '../StorageException'
+import { DeleteResult } from './DeleteResult'
 import { EntryStream } from './EntryStream'
 import { JournalReader } from './JournalReader'
 import { Outcome } from './Outcome'
+import { StreamInfo } from './StreamInfo'
+import { TombstoneResult } from './TombstoneResult'
+import { TruncateResult } from './TruncateResult'
 
 /**
  * Result of an append operation, containing all contextual information.
@@ -58,16 +62,33 @@ export class AppendResult<S, ST> {
 
   /**
    * Answer whether the append was successful.
+   * Returns true only if the outcome is a Success AND the result value is Result.Success.
    */
   isSuccess(): boolean {
-    return this.outcome.isSuccess()
+    return this.outcome.isSuccess() && this.outcome.value === Result.Success
   }
 
   /**
    * Answer whether the append failed.
+   * Returns true if the outcome is a Failure (exception) OR if the result indicates
+   * a non-success condition (ConcurrencyViolation, StreamDeleted, etc.).
    */
   isFailure(): boolean {
-    return this.outcome.isFailure()
+    return this.outcome.isFailure() || (this.outcome.isSuccess() && this.outcome.value !== Result.Success)
+  }
+
+  /**
+   * Answer whether the append failed due to a concurrency violation.
+   */
+  isConcurrencyViolation(): boolean {
+    return this.outcome.isSuccess() && this.outcome.value === Result.ConcurrencyViolation
+  }
+
+  /**
+   * Answer whether the append failed because the stream was deleted.
+   */
+  isStreamDeleted(): boolean {
+    return this.outcome.isSuccess() && this.outcome.value === Result.StreamDeleted
   }
 }
 
@@ -192,4 +213,97 @@ export interface Journal<T> extends ActorProtocol {
    * ```
    */
   journalReader(name: string): Promise<JournalReader<T>>
+
+  // ============================================================================
+  // Stream Lifecycle Management
+  // ============================================================================
+
+  /**
+   * Permanently delete a stream (tombstone).
+   *
+   * A tombstoned stream cannot be reopened or appended to. Any subsequent
+   * append operations will fail with StreamDeleted, and read operations
+   * will return an EntryStream with isTombstoned=true.
+   *
+   * This is useful for GDPR compliance and permanent data deletion.
+   *
+   * @param streamName the name of the stream to tombstone
+   * @returns Promise resolving to TombstoneResult
+   *
+   * @example
+   * ```typescript
+   * const result = await journal.tombstone('user-123')
+   * if (result.isSuccess()) {
+   *   console.log('Stream permanently deleted')
+   * }
+   * ```
+   */
+  tombstone(streamName: string): Promise<TombstoneResult>
+
+  /**
+   * Soft-delete a stream.
+   *
+   * Events become invisible to normal reads, but the stream can be reopened
+   * by appending new events. Event numbers continue from where they left off.
+   *
+   * @param streamName the name of the stream to soft-delete
+   * @returns Promise resolving to DeleteResult
+   *
+   * @example
+   * ```typescript
+   * const result = await journal.softDelete('order-456')
+   * if (result.isSuccess()) {
+   *   console.log(`Stream soft-deleted at version ${result.deletedAtVersion}`)
+   * }
+   *
+   * // Later, reopen by appending
+   * await journal.append('order-456', nextVersion, event, metadata)
+   * ```
+   */
+  softDelete(streamName: string): Promise<DeleteResult>
+
+  /**
+   * Set the truncate-before position for a stream.
+   *
+   * Events with version less than the specified position become invisible
+   * to reads. The events are not physically deleted. This is similar to
+   * EventStoreDB's $tb (truncate-before) metadata.
+   *
+   * @param streamName the name of the stream to truncate
+   * @param beforeVersion events with version less than this will be hidden
+   * @returns Promise resolving to TruncateResult
+   *
+   * @example
+   * ```typescript
+   * // Hide all events before version 100
+   * const result = await journal.truncateBefore('account-123', 100)
+   * if (result.isSuccess()) {
+   *   console.log('Old events hidden')
+   * }
+   * ```
+   */
+  truncateBefore(streamName: string, beforeVersion: number): Promise<TruncateResult>
+
+  /**
+   * Get information about a stream's current state.
+   *
+   * This allows checking stream existence, version, and lifecycle status
+   * before performing operations.
+   *
+   * @param streamName the name of the stream to query
+   * @returns Promise resolving to StreamInfo
+   *
+   * @example
+   * ```typescript
+   * const info = await journal.streamInfo('account-123')
+   * if (!info.exists) {
+   *   console.log('Stream does not exist')
+   * } else if (info.isTombstoned) {
+   *   console.log('Stream has been permanently deleted')
+   * } else {
+   *   console.log(`Stream at version ${info.currentVersion}`)
+   * }
+   * ```
+   */
+  streamInfo(streamName: string): Promise<StreamInfo>
 }
