@@ -28,7 +28,7 @@ import { AccountType } from '../../model/BankTypes'
  * @example
  * ```typescript
  * // Register the adapter
- * const provider = EntryAdapterProvider.getInstance()
+ * const provider = EntryAdapterProvider.instance()
  * provider.registerAdapter(AccountOpened, new AccountOpenedAdapter())
  *
  * // Reading old v1 event from journal automatically upcasts it

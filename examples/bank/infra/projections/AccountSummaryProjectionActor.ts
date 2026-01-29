@@ -77,7 +77,7 @@ export class AccountSummaryProjectionActor extends Actor implements Projection {
 
   constructor() {
     super()
-    this.adapterProvider = EntryAdapterProvider.getInstance()
+    this.adapterProvider = EntryAdapterProvider.instance()
 
     // Retrieve DocumentStore from Stage (similar to how SourcedEntity gets Journal)
     const store = stage().registeredValue<DocumentStore>('domo-tactical:bank.documentStore')

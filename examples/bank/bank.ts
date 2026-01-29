@@ -310,7 +310,7 @@ function setupPersistenceInfrastructure(): {
  * Enables schema evolution and custom serialization.
  */
 function registerEntryAdapters(): void {
-  const adapterProvider = EntryAdapterProvider.getInstance()
+  const adapterProvider = EntryAdapterProvider.instance()
   adapterProvider.registerAdapter(AccountOpened, new AccountOpenedAdapter())
   adapterProvider.registerAdapter(FundsDeposited, new FundsDepositedAdapter())
   adapterProvider.registerAdapter(FundsWithdrawn, new FundsWithdrawnAdapter())

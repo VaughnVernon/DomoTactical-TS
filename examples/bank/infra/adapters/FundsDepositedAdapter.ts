@@ -25,7 +25,7 @@ import { FundsDeposited } from '../../model/AccountEvents'
  * @example
  * ```typescript
  * // Register the adapter
- * const provider = EntryAdapterProvider.getInstance()
+ * const provider = EntryAdapterProvider.instance()
  * provider.registerAdapter(FundsDeposited, new FundsDepositedAdapter())
  *
  * // Reading old v1 event from journal automatically upcasts it
