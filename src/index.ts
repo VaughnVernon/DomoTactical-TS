@@ -17,6 +17,7 @@ export {
   Result,
   StorageException,
   EntryAdapterProvider,
+  StateAdapterProvider,
   DefaultTextEntryAdapter,
   EntryRegistry,
   ContextProfile,
