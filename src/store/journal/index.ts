@@ -16,3 +16,11 @@ export { Outcome, Success, Failure } from './Outcome'
 export { InMemoryJournal } from './inmemory/InMemoryJournal'
 export type { JournalConsumer } from './JournalConsumerActor'
 export { JournalConsumerActor } from './JournalConsumerActor'
+
+// Stream Lifecycle Management
+export { StreamState } from './StreamState'
+export type { StreamInfo } from './StreamInfo'
+export { DefaultStreamInfo } from './StreamInfo'
+export { TombstoneResult } from './TombstoneResult'
+export { DeleteResult } from './DeleteResult'
+export { TruncateResult } from './TruncateResult'

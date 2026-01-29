@@ -25,15 +25,21 @@ export {
 
 export type { PropertyTransforms, SourceTypeSpec } from './store'
 
-export type { Journal, StreamReader, JournalReader, Entry, JournalConsumer } from './store/journal'
+export type { Journal, StreamReader, JournalReader, Entry, JournalConsumer, StreamInfo } from './store/journal'
 export {
   AppendResult,
   EntryStream,
+  TextEntry,
   Outcome,
   Success,
   Failure,
   InMemoryJournal,
   JournalConsumerActor,
+  StreamState,
+  DefaultStreamInfo,
+  TombstoneResult,
+  DeleteResult,
+  TruncateResult,
 } from './store/journal'
 
 export type {
