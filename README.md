@@ -36,7 +36,7 @@ DomoTactical-TS is a comprehensive Domain-Driven Design (DDD) tactical patterns 
 
 - **Runtimes**: Node.js >= 18.0.0, Deno, Bun, Cloudflare Workers, or any V8-based JavaScript runtime
 - **TypeScript**: >= 5.0.0 (for development)
-- **DomoActors-TS**: >= 1.0.2
+- **DomoActors-TS**: >= 1.2.0
 
 DomoTactical-TS and DomoActors-TS have zero Node.js-specific dependencies and runs on any V8-compatible runtime.
 
