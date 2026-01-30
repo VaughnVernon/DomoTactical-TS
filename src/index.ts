@@ -23,7 +23,7 @@ export {
   ContextProfile,
 } from './store/index.js'
 
-export type { PropertyTransforms, SourceTypeSpec } from './store/index.js'
+export type { EntryAdapter, StateAdapter, PropertyTransforms, SourceTypeSpec } from './store/index.js'
 
 export type { Journal, StreamReader, JournalReader, Entry, JournalConsumer, StreamInfo } from './store/journal/index.js'
 export {

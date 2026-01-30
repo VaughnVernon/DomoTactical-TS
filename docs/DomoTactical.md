@@ -1216,7 +1216,8 @@ import {
   // Store types
   Source, Metadata, State, Result, StorageException,
   BinaryState, TextState, ObjectState,
-  EntryAdapterProvider, StateAdapterProvider,
+  EntryAdapter, EntryAdapterProvider,
+  StateAdapter, StateAdapterProvider,
   EntryRegistry, ContextProfile,
 
   // Journal types
@@ -1246,7 +1247,8 @@ import {
 import {
   Source, Metadata, State, Result, StorageException,
   BinaryState, TextState, ObjectState,
-  EntryAdapterProvider, StateAdapterProvider,
+  EntryAdapter, EntryAdapterProvider,
+  StateAdapter, StateAdapterProvider,
   EntryRegistry, ContextProfile
 } from 'domo-tactical/store'
 ```
