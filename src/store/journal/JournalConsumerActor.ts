@@ -8,7 +8,7 @@
 
 import { Actor, ActorProtocol } from 'domo-actors'
 import { JournalReader } from './JournalReader.js'
-import { Entry } from './Entry.js'
+import { Entry } from '../Entry.js'
 import { ProjectionDispatcher } from '../../model/projections/ProjectionDispatcher.js'
 import { Projectable } from '../../model/projections/Projectable.js'
 import { TextProjectable } from '../../model/projections/Projectable.js'

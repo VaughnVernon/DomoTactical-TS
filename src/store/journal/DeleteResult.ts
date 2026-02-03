@@ -8,7 +8,7 @@
 
 import { Result } from '../Result.js'
 import { StorageException } from '../StorageException.js'
-import { Outcome } from './Outcome.js'
+import { Outcome } from '../Outcome.js'
 
 /**
  * Result of a soft delete operation on a stream.

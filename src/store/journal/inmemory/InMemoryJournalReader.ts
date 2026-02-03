@@ -7,7 +7,7 @@
 // See: https://opensource.org/license/rpl-1-5
 
 import { Actor } from 'domo-actors'
-import { Entry } from '../Entry.js'
+import { Entry } from '../../Entry.js'
 import { JournalReader } from '../JournalReader.js'
 
 /**

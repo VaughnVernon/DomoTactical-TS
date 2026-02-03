@@ -11,18 +11,19 @@ import { Metadata } from '../../Metadata.js'
 import { Result } from '../../Result.js'
 import { Source } from '../../Source.js'
 import { State, ObjectState } from '../../State.js'
+import { Entry } from '../../Entry.js'
+import { Outcome } from '../../Outcome.js'
+import { EntryAdapterProvider } from '../../EntryAdapterProvider.js'
+import { TextEntry } from '../../TextEntry.js'
 import { AppendResult, Journal, StreamReader } from '../Journal.js'
 import { DeleteResult } from '../DeleteResult.js'
-import { Entry } from '../Entry.js'
 import { EntryStream } from '../EntryStream.js'
 import { JournalReader } from '../JournalReader.js'
-import { Outcome } from '../Outcome.js'
 import { StreamInfo, DefaultStreamInfo } from '../StreamInfo.js'
 import { StreamState } from '../StreamState.js'
 import { TombstoneResult } from '../TombstoneResult.js'
 import { TruncateResult } from '../TruncateResult.js'
 import { InMemoryJournalReader } from './InMemoryJournalReader.js'
-import { EntryAdapterProvider } from '../../EntryAdapterProvider.js'
 
 /**
  * In-memory implementation of Journal using Map-based storage.
@@ -55,9 +56,6 @@ export class InMemoryJournal<T> extends Actor implements Journal<T> {
 
   /** Map of stream names to their truncate-before position */
   private readonly truncateBeforeMap: Map<string, number> = new Map()
-
-  /** Next entry ID counter */
-  private nextEntryId = 1
 
   /** Adapter provider for Source/Entry conversion */
   private readonly adapterProvider = EntryAdapterProvider.instance()
@@ -439,17 +437,25 @@ export class InMemoryJournal<T> extends Actor implements Journal<T> {
   /**
    * Convert a Source to an Entry using EntryAdapterProvider.
    * This ensures custom adapters are used for serialization.
+   * The globalPosition is calculated based on the current journal length.
    */
   private sourceToEntry<S>(source: Source<S>, streamVersion: number, metadata: Metadata): Entry<T> {
-    const id = String(this.nextEntryId++)
+    const globalPosition = this.journal.length // Journal assigns globalPosition
     // Use EntryAdapterProvider to convert Source to Entry
     // This will use custom adapters if registered, or default adapter otherwise
-    const entry = this.adapterProvider.asEntry(source, streamVersion, metadata)
-    // Set the generated ID
-    return {
-      ...entry,
-      id
-    } as Entry<T>
+    const adapterEntry = this.adapterProvider.asEntry(source, streamVersion, metadata)
+    // Create a new TextEntry with proper globalPosition
+    // Use values from adapterEntry (id, type, typeVersion, entryData, streamVersion, metadata)
+    // Cast through unknown because T is typically string for InMemoryJournal
+    return new TextEntry(
+      adapterEntry.id,
+      globalPosition,
+      adapterEntry.type,
+      adapterEntry.typeVersion,
+      adapterEntry.entryData,
+      (adapterEntry as TextEntry).streamVersion,
+      adapterEntry.metadata
+    ) as unknown as Entry<T>
   }
 
   /**
