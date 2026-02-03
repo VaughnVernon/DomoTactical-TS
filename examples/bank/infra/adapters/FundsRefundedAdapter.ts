@@ -23,10 +23,10 @@ export class FundsRefundedAdapter extends DefaultTextEntryAdapter<FundsRefunded>
   protected override upcastIfNeeded(
     data: any,
     type: string,
-    version: number
+    typeVersion: number
   ): FundsRefunded {
     // v1 is current
-    if (version === 1) {
+    if (typeVersion === 1) {
       return new FundsRefunded(
         data.accountNumber,
         data.amount,
@@ -36,13 +36,12 @@ export class FundsRefundedAdapter extends DefaultTextEntryAdapter<FundsRefunded>
       )
     }
 
-    throw new Error(`Unsupported FundsRefunded version: ${version}`)
+    throw new Error(`Unsupported FundsRefunded typeVersion: ${typeVersion}`)
   }
 
   override toEntry(
     source: FundsRefunded,
-    version: number,
-    id: string,
+    streamVersion: number,
     metadata: Metadata = Metadata.nullMetadata()
   ): TextEntry {
     const serialized = JSON.stringify({
@@ -53,12 +52,13 @@ export class FundsRefundedAdapter extends DefaultTextEntryAdapter<FundsRefunded>
       refundedAt: source.refundedAt.toISOString()
     })
 
+    // Use 6-arg constructor - Journal assigns globalPosition
     return new TextEntry(
-      id,
+      source.id(),
       'FundsRefunded',
-      1, // Current version is 1
+      1, // Current typeVersion is 1
       serialized,
-      version,
+      streamVersion,
       JSON.stringify({
         value: metadata.value,
         operation: metadata.operation,

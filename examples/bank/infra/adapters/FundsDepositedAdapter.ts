@@ -46,16 +46,16 @@ export class FundsDepositedAdapter extends DefaultTextEntryAdapter<FundsDeposite
    *
    * @param data the deserialized data from JSON
    * @param type the event type name ("FundsDeposited")
-   * @param version the schema version from the Entry
+   * @param typeVersion the schema version from the Entry
    * @returns FundsDeposited the upcasted event instance
    */
   protected override upcastIfNeeded(
     data: any,
     type: string,
-    version: number
+    typeVersion: number
   ): FundsDeposited {
     // v2 is current - no upcasting needed
-    if (version === 2) {
+    if (typeVersion === 2) {
       return new FundsDeposited(
         data.accountNumber,
         data.amount,
@@ -66,7 +66,7 @@ export class FundsDepositedAdapter extends DefaultTextEntryAdapter<FundsDeposite
 
     // Upcast v1 → v2
     // v1 only had accountNumber and amount
-    if (version === 1) {
+    if (typeVersion === 1) {
       // Generate a transaction ID for old events that don't have one
       const transactionId = `migrated-dep-${data.accountNumber}-${Date.now()}`
 
@@ -78,22 +78,20 @@ export class FundsDepositedAdapter extends DefaultTextEntryAdapter<FundsDeposite
       )
     }
 
-    throw new Error(`Unsupported FundsDeposited version: ${version}`)
+    throw new Error(`Unsupported FundsDeposited typeVersion: ${typeVersion}`)
   }
 
   /**
    * Serialize FundsDeposited to Entry with current version (v2).
    *
    * @param source the FundsDeposited event
-   * @param version the stream version
-   * @param id the entry id
+   * @param streamVersion the stream version (1-based index in entity's stream)
    * @param metadata optional metadata
    * @returns TextEntry the serialized entry
    */
   override toEntry(
     source: FundsDeposited,
-    version: number,
-    id: string,
+    streamVersion: number,
     metadata: Metadata = Metadata.nullMetadata()
   ): TextEntry {
     const serialized = JSON.stringify({
@@ -103,12 +101,13 @@ export class FundsDepositedAdapter extends DefaultTextEntryAdapter<FundsDeposite
       depositedAt: source.depositedAt.toISOString()
     })
 
+    // Use 6-arg constructor - Journal assigns globalPosition
     return new TextEntry(
-      id,
+      source.id(),
       'FundsDeposited',
-      2, // Current version is 2
+      2, // Current typeVersion is 2
       serialized,
-      version,
+      streamVersion,
       JSON.stringify({
         value: metadata.value,
         operation: metadata.operation,

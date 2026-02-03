@@ -49,16 +49,16 @@ export class AccountOpenedAdapter extends DefaultTextEntryAdapter<AccountOpened>
    *
    * @param data the deserialized data from JSON
    * @param type the event type name ("AccountOpened")
-   * @param version the schema version from the Entry
+   * @param typeVersion the schema version from the Entry
    * @returns AccountOpened the upcasted event instance
    */
   protected override upcastIfNeeded(
     data: any,
     type: string,
-    version: number
+    typeVersion: number
   ): AccountOpened {
     // v3 is current - no upcasting needed
-    if (version === 3) {
+    if (typeVersion === 3) {
       return new AccountOpened(
         data.accountNumber,
         data.owner,
@@ -70,7 +70,7 @@ export class AccountOpenedAdapter extends DefaultTextEntryAdapter<AccountOpened>
 
     // Upcast v1 → v3
     // v1 only had accountNumber and owner
-    if (version === 1) {
+    if (typeVersion === 1) {
       return new AccountOpened(
         data.accountNumber,
         data.owner,
@@ -82,7 +82,7 @@ export class AccountOpenedAdapter extends DefaultTextEntryAdapter<AccountOpened>
 
     // Upcast v2 → v3
     // v2 added initialBalance but didn't have accountType
-    if (version === 2) {
+    if (typeVersion === 2) {
       return new AccountOpened(
         data.accountNumber,
         data.owner,
@@ -92,22 +92,20 @@ export class AccountOpenedAdapter extends DefaultTextEntryAdapter<AccountOpened>
       )
     }
 
-    throw new Error(`Unsupported AccountOpened version: ${version}`)
+    throw new Error(`Unsupported AccountOpened typeVersion: ${typeVersion}`)
   }
 
   /**
    * Serialize AccountOpened to Entry with current version (v3).
    *
    * @param source the AccountOpened event
-   * @param version the stream version
-   * @param id the entry id
+   * @param streamVersion the stream version (1-based index in entity's stream)
    * @param metadata optional metadata
    * @returns TextEntry the serialized entry
    */
   override toEntry(
     source: AccountOpened,
-    version: number,
-    id: string,
+    streamVersion: number,
     metadata: Metadata = Metadata.nullMetadata()
   ): TextEntry {
     const serialized = JSON.stringify({
@@ -118,12 +116,13 @@ export class AccountOpenedAdapter extends DefaultTextEntryAdapter<AccountOpened>
       openedAt: source.openedAt.toISOString()
     })
 
+    // Use 6-arg constructor - Journal assigns globalPosition
     return new TextEntry(
-      id,
+      source.id(),
       'AccountOpened',
-      3, // Current version is 3
+      3, // Current typeVersion is 3
       serialized,
-      version,
+      streamVersion,
       JSON.stringify({
         value: metadata.value,
         operation: metadata.operation,
