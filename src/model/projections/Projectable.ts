@@ -6,7 +6,7 @@
 // See: LICENSE.md in repository root directory
 // See: https://opensource.org/license/rpl-1-5
 
-import { Entry } from '../../store/journal/Entry.js'
+import { Entry } from '../../store/Entry.js'
 import { State } from '../../store/State.js'
 
 /**
