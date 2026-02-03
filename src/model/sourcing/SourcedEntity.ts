@@ -351,7 +351,7 @@ export abstract class SourcedEntity<T> extends EntityActor {
           await andThen()
         }
       } else {
-        const applicable = new Applicable(null, sources, metadata)
+        const applicable = new Applicable(snapshot ?? null, sources, metadata)
         const message = `Source (count ${sources.length}) not appended for: ${this.type()}(${this.streamName})`
         const error = new ApplyFailedError(applicable, message)
         const maybeError = await this.afterApplyFailed(error)
@@ -362,7 +362,7 @@ export abstract class SourcedEntity<T> extends EntityActor {
         }
       }
     } catch (error) {
-      const applicable = new Applicable(null, sources, metadata)
+      const applicable = new Applicable(snapshot ?? null, sources, metadata)
       const message = `Source append failed for: ${this.type()}(${this.streamName})`
       const applyError = new ApplyFailedError(applicable, message, error as Error)
       const maybeError = await this.afterApplyFailed(applyError)
