@@ -27,6 +27,7 @@ DomoTactical-TS is a comprehensive Domain-Driven Design (DDD) tactical patterns 
 
 - 🎭 **Actor-Based Aggregates** - Built on DomoActors for concurrency and fault tolerance
 - 🔄 **Full CQRS Pipeline** - From commands/events through projections to read models
+- 🛡️ **Default Supervisors** - Built-in supervisors for journal, document store, and projection actors with comprehensive error handling
 - 📦 **Zero Dependencies** - Pure V8 JavaScript, runs anywhere (Node.js, Deno, Bun, Cloudflare Workers)
 - 🧪 **Test-Ready** - Complete testkit module with in-memory implementations
 - 📘 **Type-Safe** - Full TypeScript support with comprehensive type definitions

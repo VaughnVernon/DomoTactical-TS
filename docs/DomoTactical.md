@@ -181,7 +181,7 @@ export abstract class EntityActor extends Actor {
 ```
 
 #### **ApplyFailedError.ts**
-Error type for failed source application.
+Error type for failed source application, providing context about what was being applied when the failure occurred.
 
 ```typescript
 export class Applicable<T> {
@@ -196,6 +196,57 @@ export class ApplyFailedError extends Error {
   public readonly applicable: Applicable<unknown>
 }
 ```
+
+When a `SourcedEntity` fails to apply sources (e.g., journal append fails), it creates an `Applicable` instance containing:
+- **state**: The current snapshot state of the entity (or `null` if no snapshot exists)
+- **sources**: The sources that failed to be applied
+- **metadata**: The metadata associated with the operation
+
+This context is wrapped in an `ApplyFailedError` and passed to the `afterApplyFailed()` hook:
+
+```typescript
+// Inside SourcedEntity.applyInternal():
+const snapshot = this.snapshot()
+
+try {
+  const result = await this._journal.appendAll(this.streamName, this.nextVersion(), sources, metadata)
+
+  if (!result.isSuccess()) {
+    const applicable = new Applicable(snapshot ?? null, sources, metadata)
+    const error = new ApplyFailedError(applicable, `Source not appended for: ${this.type()}`)
+    await this.afterApplyFailed(error)
+  }
+} catch (error) {
+  const applicable = new Applicable(snapshot ?? null, sources, metadata)
+  const applyError = new ApplyFailedError(applicable, `Source append failed`, error as Error)
+  await this.afterApplyFailed(applyError)
+}
+```
+
+You can override `afterApplyFailed()` in your entity to handle failures:
+
+```typescript
+class Order extends EventSourcedEntity<OrderState> {
+  protected async afterApplyFailed(error: ApplyFailedError): Promise<Error | undefined> {
+    // Access the snapshot state at time of failure
+    const state = error.applicable.state as OrderState | null
+
+    // Access the sources that failed to apply
+    const sources = error.applicable.sources
+
+    // Log, retry, compensate, or rethrow
+    this.logger().warn(`Failed to apply ${sources.length} sources`, { state })
+
+    return error // Return to propagate, undefined to suppress
+  }
+}
+```
+
+**Recommended: Use a Custom Supervisor**
+
+While overriding `afterApplyFailed()` works for simple cases, a better approach is to create a custom Supervisor. Supervisors provide centralized error handling following the "let it crash" philosophy, allowing your entities to remain focused on business logic while the supervisor handles failure recovery across all supervised actors.
+
+DomoTactical provides two built-in supervisors: `DefaultJournalSupervisor` (documented in the Journal module) for event/command sourced entities, and `DefaultDocumentStoreSupervisor` (documented in the Document Store module) for document-backed actors. You can also create your own by extending `DefaultSupervisor` from `domo-actors`.
 
 ### Sourcing Module (`/src/model/sourcing/`)
 
@@ -569,6 +620,77 @@ await journal.appendWith('account-1', 5, event, metadata, snapshot)
 // Get stream reader
 const reader = await journal.journalReader('projection-reader')
 const entries = await reader.readNext(10)
+```
+
+#### **DefaultJournalSupervisor.ts**
+Default supervisor for Journal-backed actors (SourcedEntity instances).
+
+**Key Features:**
+- Comprehensive error handling for event/command sourced entities
+- Resume for business logic errors (validation failures, business rule violations)
+- Resume for concurrency conflicts (optimistic locking violations)
+- Restart for state corruption or internal consistency errors
+- Resume for storage failures (allowing recovery when storage is restored)
+- Extracts context from ApplyFailedError when available
+
+**Directive Decision Logic:**
+| Error Type | Directive | Rationale |
+|------------|-----------|-----------|
+| Concurrency, version conflict | Resume | Entity can retry |
+| Validation, invalid, not found | Resume | Business errors, expected |
+| Insufficient, already exists | Resume | Business rule violations |
+| Corrupt, inconsistent, state error | Restart | Rebuild from event stream |
+| Storage unavailable, connection lost | Resume | External recovery (see note) |
+| Unknown | Resume | System continues |
+
+**Note on Storage Failures:** Storage failures use `Resume` rather than `Stop` because the storage mechanism recovery is handled externally (by Kubernetes, administrators, etc.). The journal will recover gracefully once storage becomes available again. Stopping the actor would require a service restart to recover, which is undesirable when the storage issue is transient or externally managed. The application remains running and can process requests once storage is restored.
+
+**Usage Example:**
+
+```typescript
+import { stage, Protocol, Definition } from 'domo-actors'
+import {
+  defaultJournalSupervisor,
+  DEFAULT_JOURNAL_SUPERVISOR,
+  InMemoryJournal,
+  Journal,
+  EventSourcedEntity
+} from 'domo-tactical'
+
+// Step 1: Create the supervisor using the convenience function
+// This creates a supervisor named 'default-journal-supervisor'
+defaultJournalSupervisor()
+
+// Step 2: Create the journal under the default-journal-supervisor
+// Use the DEFAULT_JOURNAL_SUPERVISOR constant for the supervisor name
+const journalProtocol: Protocol = {
+  type: () => 'Journal',
+  instantiator: () => ({ instantiate: () => new InMemoryJournal<string>() })
+}
+const journal = stage().actorFor<Journal<string>>(
+  journalProtocol,
+  undefined,
+  DEFAULT_JOURNAL_SUPERVISOR  // <-- References the supervisor by its type name
+)
+
+// Register the journal for sourced entities to find
+stage().registerValue('domo-tactical:default.journal', journal)
+
+// Step 3: Create sourced entities under the same supervisor
+const orderProtocol: Protocol = {
+  type: () => 'Order',
+  instantiator: () => ({
+    instantiate: (definition: Definition) => new Order(definition.parameters()[0])
+  })
+}
+const order = stage().actorFor<Order>(
+  orderProtocol,
+  ['order-123'],              // Constructor parameters
+  DEFAULT_JOURNAL_SUPERVISOR  // <-- Same supervisor handles errors for this entity
+)
+
+// Now when the Order entity throws errors (validation, concurrency, etc.),
+// the DefaultJournalSupervisor will handle them according to its directive logic
 ```
 
 #### **JournalReader.ts**
@@ -964,6 +1086,103 @@ const allProfiles = await store.readAll('UserProfile')
 console.log(allProfiles.states)  // Array of all UserProfile documents
 ```
 
+#### **DefaultDocumentStoreSupervisor.ts**
+Default supervisor for DocumentStore-backed actors (stateful entities, projections).
+
+**Key Features:**
+- Comprehensive error handling for document-based storage
+- Resume for business logic errors (validation failures, not found)
+- Resume for concurrency conflicts (optimistic locking violations)
+- Restart for state corruption, serialization, or schema errors
+- Resume for storage failures (allowing recovery when storage is restored)
+
+**Directive Decision Logic:**
+| Error Type | Directive | Rationale |
+|------------|-----------|-----------|
+| Concurrency, version conflict | Resume | Actor can retry |
+| Validation, invalid, not found | Resume | Business errors, expected |
+| Already exists, duplicate | Resume | Business rule violations |
+| Serialization, deserialization | Restart | Clear corrupted state |
+| Schema, parse error, JSON | Restart | Schema mismatch |
+| Corrupt, inconsistent, state error | Restart | Reload from store |
+| Storage unavailable, connection lost | Resume | External recovery (see note) |
+| Unknown | Resume | System continues |
+
+**Note on Storage Failures:** Storage failures use `Resume` rather than `Stop` because the storage mechanism recovery is handled externally (by Kubernetes, administrators, etc.). The document store will recover gracefully once storage becomes available again. Stopping the actor would require a service restart to recover, which is undesirable when the storage issue is transient or externally managed. The application remains running and can process requests once storage is restored.
+
+**Usage Example:**
+
+```typescript
+import { stage, Protocol, Definition } from 'domo-actors'
+import {
+  defaultDocumentStoreSupervisor,
+  DEFAULT_DOCUMENT_STORE_SUPERVISOR,
+  InMemoryDocumentStore,
+  DocumentStore,
+  Projection
+} from 'domo-tactical'
+
+// Step 1: Create the supervisor using the convenience function
+// This creates a supervisor named 'default-document-store-supervisor'
+defaultDocumentStoreSupervisor()
+
+// Step 2: Create the document store under the default-document-store-supervisor
+// Use the DEFAULT_DOCUMENT_STORE_SUPERVISOR constant for the supervisor name
+const documentStoreProtocol: Protocol = {
+  type: () => 'DocumentStore',
+  instantiator: () => ({ instantiate: () => new InMemoryDocumentStore() })
+}
+const documentStore = stage().actorFor<DocumentStore>(
+  documentStoreProtocol,
+  undefined,
+  DEFAULT_DOCUMENT_STORE_SUPERVISOR  // <-- References the supervisor by its type name
+)
+
+// Register the document store for projections to find
+stage().registerValue('domo-tactical:default.documentStore', documentStore)
+
+// Step 3: Create projections under the same supervisor
+const userProfileProjectionProtocol: Protocol = {
+  type: () => 'UserProfileProjection',
+  instantiator: () => ({
+    instantiate: () => new UserProfileProjection()
+  })
+}
+const projection = stage().actorFor<Projection>(
+  userProfileProjectionProtocol,
+  undefined,
+  DEFAULT_DOCUMENT_STORE_SUPERVISOR  // <-- Same supervisor handles errors for this projection
+)
+
+// Now when the projection throws errors (serialization, validation, etc.),
+// the DefaultDocumentStoreSupervisor will handle them according to its directive logic
+```
+
+**Combining Both Supervisors:**
+
+In a typical CQRS application, you might use both supervisors - one for the write side (journal/sourced entities) and one for the read side (document store/projections):
+
+```typescript
+import {
+  defaultJournalSupervisor,
+  DEFAULT_JOURNAL_SUPERVISOR,
+  defaultDocumentStoreSupervisor,
+  DEFAULT_DOCUMENT_STORE_SUPERVISOR
+} from 'domo-tactical'
+
+// Create both supervisors using convenience functions
+defaultJournalSupervisor()
+defaultDocumentStoreSupervisor()
+
+// Journal and entities under default-journal-supervisor
+const journal = stage().actorFor<Journal<string>>(journalProtocol, undefined, DEFAULT_JOURNAL_SUPERVISOR)
+const order = stage().actorFor<Order>(orderProtocol, ['order-1'], DEFAULT_JOURNAL_SUPERVISOR)
+
+// Document store and projections under default-document-store-supervisor
+const docStore = stage().actorFor<DocumentStore>(storeProtocol, undefined, DEFAULT_DOCUMENT_STORE_SUPERVISOR)
+const projection = stage().actorFor<Projection>(projProtocol, undefined, DEFAULT_DOCUMENT_STORE_SUPERVISOR)
+```
+
 ### Projection Components (`/src/model/projections/`)
 
 The projections module implements the CQRS read-side, building query models from event/command streams.
@@ -1222,10 +1441,13 @@ import {
 
   // Journal types
   Journal, AppendResult, Entry, EntityStream, Outcome,
-  InMemoryJournal,
+  InMemoryJournal, DefaultJournalSupervisor,
+  defaultJournalSupervisor, DEFAULT_JOURNAL_SUPERVISOR,
 
   // Document store types
-  DocumentStore, InMemoryDocumentStore,
+  DocumentStore, InMemoryDocumentStore, DefaultDocumentStoreSupervisor,
+  defaultDocumentStoreSupervisor, DEFAULT_DOCUMENT_STORE_SUPERVISOR,
+  defaultProjectionSupervisor, DEFAULT_PROJECTION_SUPERVISOR,
 
   // Model types
   Command, DomainEvent, EntityActor,
@@ -1259,7 +1481,10 @@ import {
   Journal, JournalReader, AppendResult,
   Entry, EntityStream, Outcome,
   InMemoryJournal,
-  JournalConsumer, JournalConsumerActor
+  JournalConsumer, JournalConsumerActor,
+  DefaultJournalSupervisor,
+  defaultJournalSupervisor,
+  DEFAULT_JOURNAL_SUPERVISOR
 } from 'domo-tactical/store/journal'
 ```
 
@@ -1268,7 +1493,12 @@ import {
 import {
   DocumentStore, DocumentBundle,
   ReadResult, WriteResult,
-  InMemoryDocumentStore
+  InMemoryDocumentStore,
+  DefaultDocumentStoreSupervisor,
+  defaultDocumentStoreSupervisor,
+  DEFAULT_DOCUMENT_STORE_SUPERVISOR,
+  defaultProjectionSupervisor,
+  DEFAULT_PROJECTION_SUPERVISOR
 } from 'domo-tactical/store/document'
 ```
 
@@ -1298,7 +1528,8 @@ import {
   Projection, Projectable, ProjectionControl,
   ProjectionDispatcher, JournalConsumer,
   ProjectionSupervisor, Confirmer,
-  ProjectToDescription, MatchableProjections
+  ProjectToDescription, MatchableProjections,
+  defaultProjectionSupervisor, DEFAULT_PROJECTION_SUPERVISOR
 } from 'domo-tactical/model/projections'
 ```
 
@@ -1540,7 +1771,8 @@ import {
   EventSourcedEntity, DomainEvent, Metadata,
   Projection, Projectable, ProjectionControl,
   TextProjectionDispatcherActor, JournalConsumerActor,
-  ProjectionSupervisor, ProjectToDescription
+  defaultProjectionSupervisor, DEFAULT_PROJECTION_SUPERVISOR,
+  ProjectToDescription
 } from 'domo-tactical'
 import { TestJournal, TestDocumentStore, TestConfirmer } from 'domo-tactical/testkit'
 
@@ -1626,14 +1858,8 @@ const confirmer = new TestConfirmer()
 
 stage().registerValue('documentStore', documentStore)
 
-// Create projection supervisor
-const supervisor = stage().actorFor(
-  { type: () => 'ProjectionSupervisor',
-    instantiator: () => ({ instantiate: () => new ProjectionSupervisor() })
-  },
-  undefined,
-  'default'
-)
+// Create projection supervisor using convenience function
+defaultProjectionSupervisor()
 
 // Create projection
 const projection = stage().actorFor(
@@ -1641,7 +1867,7 @@ const projection = stage().actorFor(
     instantiator: () => ({ instantiate: () => new UserProfileProjection() })
   },
   undefined,
-  'projection-supervisor'
+  DEFAULT_PROJECTION_SUPERVISOR
 )
 
 // Create dispatcher
@@ -1652,7 +1878,7 @@ const dispatcher = stage().actorFor(
     })
   },
   undefined,
-  'projection-supervisor',
+  DEFAULT_PROJECTION_SUPERVISOR,
   undefined,
   confirmer
 )
@@ -1673,7 +1899,7 @@ const consumer = stage().actorFor(
     })
   },
   undefined,
-  'projection-supervisor',
+  DEFAULT_PROJECTION_SUPERVISOR,
   undefined,
   reader,
   dispatcher,

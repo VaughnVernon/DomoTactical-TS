@@ -5,6 +5,85 @@ All notable changes to DomoTactical-TS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-02-03
+
+### Added
+
+#### Default Supervisors
+
+New built-in supervisors with comprehensive error handling for different actor types, following the "let it crash" philosophy.
+
+**DefaultJournalSupervisor** - For journal-backed actors (event/command sourced entities):
+- Resume for concurrency conflicts (optimistic locking violations)
+- Resume for business logic errors (validation, not found, insufficient funds)
+- Restart for state corruption or internal consistency errors
+- Resume for storage failures (external recovery by k8s, admins, etc.)
+
+**DefaultDocumentStoreSupervisor** - For document store-backed actors (stateful entities, projections):
+- Resume for storage failures (external recovery)
+- Restart for serialization/schema/JSON errors
+- Restart for state corruption
+- Resume for concurrency conflicts
+- Resume for business logic errors
+
+**Convenience Functions:**
+```typescript
+import {
+  defaultJournalSupervisor,
+  DEFAULT_JOURNAL_SUPERVISOR,
+  defaultDocumentStoreSupervisor,
+  DEFAULT_DOCUMENT_STORE_SUPERVISOR,
+  defaultProjectionSupervisor,
+  DEFAULT_PROJECTION_SUPERVISOR
+} from 'domo-tactical'
+
+// Create supervisors with standard names
+defaultJournalSupervisor()
+defaultDocumentStoreSupervisor()
+defaultProjectionSupervisor()
+
+// Create actors under these supervisors
+const journal = stage().actorFor<Journal<string>>(
+  journalProtocol,
+  undefined,
+  DEFAULT_JOURNAL_SUPERVISOR
+)
+
+const projection = stage().actorFor<Projection>(
+  projectionProtocol,
+  undefined,
+  DEFAULT_PROJECTION_SUPERVISOR
+)
+```
+
+**New Exports:**
+- `DefaultJournalSupervisor` class
+- `defaultJournalSupervisor()` function
+- `DEFAULT_JOURNAL_SUPERVISOR` constant (`'default-journal-supervisor'`)
+- `DefaultDocumentStoreSupervisor` class
+- `defaultDocumentStoreSupervisor()` function
+- `DEFAULT_DOCUMENT_STORE_SUPERVISOR` constant (`'default-document-store-supervisor'`)
+- `defaultProjectionSupervisor()` function
+- `DEFAULT_PROJECTION_SUPERVISOR` constant (`'default-projection-supervisor'`)
+
+**Note:** `defaultProjectionSupervisor()` creates a `DefaultDocumentStoreSupervisor` with the name `'default-projection-supervisor'`, allowing users to create custom projection supervisors if needed.
+
+### Fixed
+
+#### SourcedEntity Snapshot Bug
+
+Fixed a bug in `SourcedEntity.ts` where `Applicable` was always instantiated with `null` for state instead of passing the actual snapshot. This affected error handling in `afterApplyFailed()` when snapshots were present.
+
+### Changed
+
+#### Documentation
+
+- Added comprehensive documentation for default supervisors in `docs/DomoTactical.md`
+- Added directive decision tables showing error handling behavior
+- Added "Note on Storage Failures" explaining Resume rationale for storage errors
+- Added complete usage examples for supervisor creation
+- Updated `afterApplyFailed()` documentation to recommend using custom Supervisors
+
 ## [0.3.0] - 2026-01-29
 
 ### Changed
