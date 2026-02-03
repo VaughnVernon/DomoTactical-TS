@@ -8,7 +8,7 @@
 
 import { Source } from './Source.js'
 import { EntryAdapter } from './EntryAdapter.js'
-import { TextEntry } from './journal/TextEntry.js'
+import { TextEntry } from './TextEntry.js'
 import { Metadata } from './Metadata.js'
 
 /**
@@ -27,13 +27,13 @@ import { Metadata } from './Metadata.js'
  * ```typescript
  * // Use default adapter (no upcasting)
  * const adapter = new DefaultTextEntryAdapter<AccountOpened>()
- * const entry = adapter.toEntry(event, 1, 'entry-123', metadata)
+ * const entry = adapter.toEntry(event, 1, metadata)
  * const event2 = adapter.fromEntry(entry)
  *
  * // Extend for custom upcasting
  * class AccountOpenedAdapter extends DefaultTextEntryAdapter<AccountOpened> {
- *   protected override upcastIfNeeded(data: any, type: string, version: number): AccountOpened {
- *     if (version === 1) {
+ *   protected override upcastIfNeeded(data: any, type: string, typeVersion: number): AccountOpened {
+ *     if (typeVersion === 1) {
  *       // Upcast v1 to v2
  *       return new AccountOpened(data.accountId, data.owner, 0)
  *     }
@@ -60,12 +60,13 @@ export class DefaultTextEntryAdapter<S extends Source<any>>
     // Deserialize from JSON
     const data = JSON.parse(entry.entryData)
 
-    // Potential upcast from old version to current
+    // Potential upcast from old schema version to current
     return this.upcastIfNeeded(data, entry.type, entry.typeVersion)
   }
 
   /**
    * Convert Source to Entry with minimal metadata (2-arg overload).
+   * Uses source.id() for entry id and 0 for streamVersion.
    *
    * @param source the Source to convert
    * @param metadata optional metadata
@@ -74,34 +75,39 @@ export class DefaultTextEntryAdapter<S extends Source<any>>
   toEntry(source: S, metadata?: Metadata): TextEntry
 
   /**
-   * Convert Source to Entry with version and id (4-arg overload).
+   * Convert Source to Entry with streamVersion (3-arg overload).
    *
    * @param source the Source to convert
-   * @param version the stream version
-   * @param id the entry id
+   * @param streamVersion the stream version (1-based index in entity's stream)
    * @param metadata optional metadata
    * @returns TextEntry the entry instance
    */
-  toEntry(source: S, version: number, id: string, metadata?: Metadata): TextEntry
+  toEntry(source: S, streamVersion: number, metadata?: Metadata): TextEntry
 
   /**
    * Implementation of overloaded toEntry methods.
+   *
+   * Creates a TextEntry using the 6-arg constructor (without globalPosition).
+   * The Journal assigns globalPosition when appending to the journal.
    */
   toEntry(
     source: S,
-    versionOrMetadata?: number | Metadata,
-    id?: string,
+    streamVersionOrMetadata?: number | Metadata,
     metadata?: Metadata
   ): TextEntry {
     const serialized = JSON.stringify(source)
+    const id = source.id()
 
-    // Check if this is the 2-arg overload (source, metadata)
-    if (typeof versionOrMetadata !== 'number') {
-      const actualMetadata = versionOrMetadata || Metadata.nullMetadata()
+    // Check if this is the 2-arg overload (source, metadata?)
+    if (typeof streamVersionOrMetadata !== 'number') {
+      const actualMetadata = streamVersionOrMetadata || Metadata.nullMetadata()
+      // Use 6-arg form with streamVersion=0 as placeholder
       return new TextEntry(
+        id,
         source.typeName(),
         source.sourceTypeVersion,
         serialized,
+        0, // Placeholder streamVersion for 2-arg overload
         JSON.stringify({
           value: actualMetadata.value,
           operation: actualMetadata.operation,
@@ -110,16 +116,16 @@ export class DefaultTextEntryAdapter<S extends Source<any>>
       )
     }
 
-    // This is the 4-arg overload (source, version, id, metadata)
-    const version = versionOrMetadata
+    // This is the 3-arg overload (source, streamVersion, metadata?)
+    const streamVersion = streamVersionOrMetadata
     const actualMetadata = metadata || Metadata.nullMetadata()
 
     return new TextEntry(
-      id || '',
+      id,
       source.typeName(),
       source.sourceTypeVersion,
       serialized,
-      version,
+      streamVersion,
       JSON.stringify({
         value: actualMetadata.value,
         operation: actualMetadata.operation,
@@ -138,19 +144,19 @@ export class DefaultTextEntryAdapter<S extends Source<any>>
    *
    * @param data the deserialized data from JSON
    * @param type the Source type name (e.g., "AccountOpened")
-   * @param version the schema version from the Entry
+   * @param typeVersion the schema version from the Entry (for evolution)
    * @returns S the upcasted Source instance
    *
    * @example
    * ```typescript
-   * protected override upcastIfNeeded(data: any, type: string, version: number): AccountOpened {
+   * protected override upcastIfNeeded(data: any, type: string, typeVersion: number): AccountOpened {
    *   // v3 is current - no upcasting needed
-   *   if (version === 3) {
+   *   if (typeVersion === 3) {
    *     return data as AccountOpened
    *   }
    *
    *   // Upcast v1 → v3
-   *   if (version === 1) {
+   *   if (typeVersion === 1) {
    *     return new AccountOpened(
    *       data.accountId,
    *       data.owner,
@@ -160,7 +166,7 @@ export class DefaultTextEntryAdapter<S extends Source<any>>
    *   }
    *
    *   // Upcast v2 → v3
-   *   if (version === 2) {
+   *   if (typeVersion === 2) {
    *     return new AccountOpened(
    *       data.accountId,
    *       data.owner,
@@ -169,11 +175,11 @@ export class DefaultTextEntryAdapter<S extends Source<any>>
    *     )
    *   }
    *
-   *   throw new Error(`Unsupported AccountOpened version: ${version}`)
+   *   throw new Error(`Unsupported AccountOpened typeVersion: ${typeVersion}`)
    * }
    * ```
    */
-  protected upcastIfNeeded(data: any, type: string, version: number): S {
+  protected upcastIfNeeded(data: any, type: string, typeVersion: number): S {
     // Default: no upcasting, return as-is
     return data as S
   }

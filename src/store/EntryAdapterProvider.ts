@@ -7,8 +7,8 @@
 // See: https://opensource.org/license/rpl-1-5
 
 import { Source } from './Source.js'
-import { Entry } from './journal/Entry.js'
-import { TextEntry } from './journal/TextEntry.js'
+import { Entry } from './Entry.js'
+import { TextEntry } from './TextEntry.js'
 import { EntryAdapter } from './EntryAdapter.js'
 import { DefaultTextEntryAdapter } from './DefaultTextEntryAdapter.js'
 import { Metadata } from './Metadata.js'
@@ -147,14 +147,14 @@ export class EntryAdapterProvider {
    */
   asEntry<S extends Source<any>>(
     source: S,
-    version: number,
+    streamVersion: number,
     metadata: Metadata = Metadata.nullMetadata()
   ): Entry<any> {
     const adapter = this.adapters.get(source.constructor.name)
     if (adapter) {
-      return adapter.toEntry(source, version, '', metadata)
+      return adapter.toEntry(source, streamVersion, metadata)
     }
-    return this.defaultAdapter.toEntry(source, version, '', metadata)
+    return this.defaultAdapter.toEntry(source, streamVersion, metadata)
   }
 
   /**
@@ -163,23 +163,23 @@ export class EntryAdapterProvider {
    * Used by Journal.appendAll() to serialize multiple Sources at once.
    *
    * @param sources the Sources to convert
-   * @param fromVersion the starting stream version
+   * @param fromStreamVersion the starting stream version
    * @param metadata optional metadata
    * @returns Entry[] array of serialized entries
    *
    * @example
    * ```typescript
    * const entries = provider.asEntries([event1, event2, event3], 1, metadata)
-   * // Returns 3 entries with versions 1, 2, 3
+   * // Returns 3 entries with streamVersions 1, 2, 3
    * ```
    */
   asEntries<S extends Source<any>>(
     sources: S[],
-    fromVersion: number,
+    fromStreamVersion: number,
     metadata: Metadata = Metadata.nullMetadata()
   ): Entry<any>[] {
     return sources.map((source, index) =>
-      this.asEntry(source, fromVersion + index, metadata)
+      this.asEntry(source, fromStreamVersion + index, metadata)
     )
   }
 
