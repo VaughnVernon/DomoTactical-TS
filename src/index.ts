@@ -21,18 +21,19 @@ export {
   DefaultTextEntryAdapter,
   EntryRegistry,
   ContextProfile,
-} from './store/index.js'
-
-export type { EntryAdapter, StateAdapter, PropertyTransforms, SourceTypeSpec } from './store/index.js'
-
-export type { Journal, StreamReader, JournalReader, Entry, JournalConsumer, StreamInfo } from './store/journal/index.js'
-export {
-  AppendResult,
-  EntryStream,
+  Entry,
   TextEntry,
   Outcome,
   Success,
   Failure,
+} from './store/index.js'
+
+export type { EntryAdapter, StateAdapter, PropertyTransforms, SourceTypeSpec } from './store/index.js'
+
+export type { Journal, StreamReader, JournalReader, JournalConsumer, StreamInfo } from './store/journal/index.js'
+export {
+  AppendResult,
+  EntryStream,
   InMemoryJournal,
   JournalConsumerActor,
   StreamState,
@@ -40,6 +41,9 @@ export {
   TombstoneResult,
   DeleteResult,
   TruncateResult,
+  DefaultJournalSupervisor,
+  defaultJournalSupervisor,
+  DEFAULT_JOURNAL_SUPERVISOR,
 } from './store/journal/index.js'
 
 export type {
@@ -50,7 +54,14 @@ export type {
   WriteResult,
   Outcome as DocumentOutcome
 } from './store/document/index.js'
-export { InMemoryDocumentStore } from './store/document/index.js'
+export {
+  InMemoryDocumentStore,
+  DefaultDocumentStoreSupervisor,
+  defaultDocumentStoreSupervisor,
+  DEFAULT_DOCUMENT_STORE_SUPERVISOR,
+  defaultProjectionSupervisor,
+  DEFAULT_PROJECTION_SUPERVISOR,
+} from './store/document/index.js'
 
 // Model exports
 export {

@@ -16,3 +16,10 @@ export {
 } from './DocumentStore.js'
 
 export { InMemoryDocumentStore } from './inmemory/InMemoryDocumentStore.js'
+export {
+  DefaultDocumentStoreSupervisor,
+  defaultDocumentStoreSupervisor,
+  DEFAULT_DOCUMENT_STORE_SUPERVISOR,
+  defaultProjectionSupervisor,
+  DEFAULT_PROJECTION_SUPERVISOR
+} from './DefaultDocumentStoreSupervisor.js'

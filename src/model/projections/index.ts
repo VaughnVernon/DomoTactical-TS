@@ -18,3 +18,9 @@ export type { ProjectionDispatcher } from './ProjectionDispatcher.js'
 export { AbstractProjectionDispatcherActor } from './AbstractProjectionDispatcherActor.js'
 export { TextProjectionDispatcherActor } from './TextProjectionDispatcherActor.js'
 export { ProjectionSupervisor } from './ProjectionSupervisor.js'
+
+// Re-export projection supervisor from document store for convenience
+export {
+  defaultProjectionSupervisor,
+  DEFAULT_PROJECTION_SUPERVISOR
+} from '../../store/document/DefaultDocumentStoreSupervisor.js'
