@@ -9,7 +9,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { EntryAdapterProvider } from '../../src/store/EntryAdapterProvider'
 import { DefaultTextEntryAdapter } from '../../src/store/DefaultTextEntryAdapter'
-import { TextEntry } from '../../src/store/journal/TextEntry'
+import { TextEntry } from '../../src/store/TextEntry'
 import { Metadata } from '../../src/store/Metadata'
 import { DomainEvent } from '../../src/model/DomainEvent'
 
@@ -138,6 +138,7 @@ describe('Schema Evolution with Adapters', () => {
     it('should upcast v1 event (no name, no role)', () => {
       const v1Entry = new TextEntry(
         'e1',
+        0, // globalPosition
         'UserRegistered',
         1, // v1
         JSON.stringify({ userId: 'user-1', email: 'alice@example.com' }),
@@ -156,6 +157,7 @@ describe('Schema Evolution with Adapters', () => {
     it('should upcast v2 event (has name, no role)', () => {
       const v2Entry = new TextEntry(
         'e2',
+        1, // globalPosition
         'UserRegistered',
         2, // v2
         JSON.stringify({ userId: 'user-2', email: 'bob@example.com', name: 'Bob' }),
@@ -174,6 +176,7 @@ describe('Schema Evolution with Adapters', () => {
     it('should not upcast v3 event (current version)', () => {
       const v3Entry = new TextEntry(
         'e3',
+        2, // globalPosition
         'UserRegistered',
         3, // v3 (current)
         JSON.stringify({
@@ -199,6 +202,7 @@ describe('Schema Evolution with Adapters', () => {
     it('should upcast v1 event (no currency)', () => {
       const v1Entry = new TextEntry(
         'e10',
+        3, // globalPosition
         'OrderPlaced',
         1, // v1
         JSON.stringify({ orderId: 'order-1', customerId: 'cust-1', totalAmount: 99.99 }),
@@ -217,6 +221,7 @@ describe('Schema Evolution with Adapters', () => {
     it('should not upcast v2 event (current version)', () => {
       const v2Entry = new TextEntry(
         'e11',
+        4, // globalPosition
         'OrderPlaced',
         2, // v2 (current)
         JSON.stringify({
@@ -244,6 +249,7 @@ describe('Schema Evolution with Adapters', () => {
         // v1 UserRegistered
         new TextEntry(
           'e1',
+          0, // globalPosition
           'UserRegistered',
           1,
           JSON.stringify({ userId: 'u1', email: 'a@test.com' }),
@@ -253,6 +259,7 @@ describe('Schema Evolution with Adapters', () => {
         // v1 OrderPlaced
         new TextEntry(
           'e2',
+          1, // globalPosition
           'OrderPlaced',
           1,
           JSON.stringify({ orderId: 'o1', customerId: 'u1', totalAmount: 100 }),
@@ -262,6 +269,7 @@ describe('Schema Evolution with Adapters', () => {
         // v2 UserRegistered
         new TextEntry(
           'e3',
+          2, // globalPosition
           'UserRegistered',
           2,
           JSON.stringify({ userId: 'u2', email: 'b@test.com', name: 'Bob' }),
@@ -271,6 +279,7 @@ describe('Schema Evolution with Adapters', () => {
         // v3 UserRegistered (current)
         new TextEntry(
           'e4',
+          3, // globalPosition
           'UserRegistered',
           3,
           JSON.stringify({ userId: 'u3', email: 'c@test.com', name: 'Charlie', role: 'admin' }),
@@ -280,6 +289,7 @@ describe('Schema Evolution with Adapters', () => {
         // v2 OrderPlaced (current)
         new TextEntry(
           'e5',
+          4, // globalPosition
           'OrderPlaced',
           2,
           JSON.stringify({ orderId: 'o2', customerId: 'u3', totalAmount: 200, currency: 'GBP' }),

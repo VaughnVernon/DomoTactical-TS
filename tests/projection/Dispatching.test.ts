@@ -20,7 +20,7 @@ import {
   ProjectionSupervisor
 } from '../../src/model/projections'
 import { TestConfirmer } from '../../src/testkit'
-import { TextEntry } from '../../src/store/journal/TextEntry'
+import { TextEntry } from '../../src/store/TextEntry'
 import { Metadata } from '../../src/store/Metadata'
 
 /**
@@ -459,9 +459,11 @@ describe('Projection Matching and Dispatching', () => {
       projection2 = stage().actorFor<Projection>(projectionProtocol, undefined, 'projection-supervisor')
 
       const entry = new TextEntry(
+        'acc-1',
         'AccountOpened',
         1,
         JSON.stringify({ accountId: 'acc-1', owner: 'Alice' }),
+        1,
         JSON.stringify(Metadata.nullMetadata())
       )
 
@@ -658,19 +660,19 @@ describe('Projection Matching and Dispatching', () => {
       // Create events
       const accountOpened = new TextProjectable(
         null,
-        [new TextEntry('AccountOpened', 1, JSON.stringify({ accountId: 'acc-1' }), '{}')],
+        [new TextEntry('acc-1', 'AccountOpened', 1, JSON.stringify({ accountId: 'acc-1' }), 1, '{}')],
         'AccountOpened'
       )
 
       const fundsDeposited = new TextProjectable(
         null,
-        [new TextEntry('FundsDeposited', 1, JSON.stringify({ accountId: 'acc-1', amount: 100 }), '{}')],
+        [new TextEntry('acc-1', 'FundsDeposited', 1, JSON.stringify({ accountId: 'acc-1', amount: 100 }), 2, '{}')],
         'FundsDeposited'
       )
 
       const transferStarted = new TextProjectable(
         null,
-        [new TextEntry('TransferStarted', 1, JSON.stringify({ transferId: 't-1' }), '{}')],
+        [new TextEntry('t-1', 'TransferStarted', 1, JSON.stringify({ transferId: 't-1' }), 1, '{}')],
         'TransferStarted'
       )
 

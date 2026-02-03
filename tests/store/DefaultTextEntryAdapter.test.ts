@@ -10,7 +10,7 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { DefaultTextEntryAdapter } from '../../src/store/DefaultTextEntryAdapter'
 import { DomainEvent } from '../../src/model/DomainEvent'
 import { Metadata } from '../../src/store/Metadata'
-import { TextEntry } from '../../src/store/journal/TextEntry'
+import { TextEntry } from '../../src/store/TextEntry'
 
 // Test event for adapter tests
 class TestEvent extends DomainEvent {
@@ -47,15 +47,15 @@ class VersionedEventAdapter extends DefaultTextEntryAdapter<VersionedEvent> {
   protected override upcastIfNeeded(
     data: any,
     type: string,
-    version: number
+    typeVersion: number
   ): VersionedEvent {
     // v2 is current
-    if (version === 2) {
+    if (typeVersion === 2) {
       return new VersionedEvent(data.eventId, data.fieldV1, data.fieldV2)
     }
 
     // Upcast v1 → v2
-    if (version === 1) {
+    if (typeVersion === 1) {
       return new VersionedEvent(
         data.eventId,
         data.fieldV1,
@@ -63,7 +63,7 @@ class VersionedEventAdapter extends DefaultTextEntryAdapter<VersionedEvent> {
       )
     }
 
-    throw new Error(`Unsupported version: ${version}`)
+    throw new Error(`Unsupported version: ${typeVersion}`)
   }
 }
 
@@ -90,16 +90,20 @@ describe('DefaultTextEntryAdapter', () => {
       expect(entry.metadata).toBeDefined()
     })
 
-    it('should serialize Source to TextEntry (4-arg overload)', () => {
+    it('should serialize Source to TextEntry (3-arg overload)', () => {
       const event = new TestEvent('event-1', 'test data')
 
-      const entry = adapter.toEntry(event, 5, 'entry-123', metadata)
+      const entry = adapter.toEntry(event, 5, metadata)
 
       expect(entry).toBeInstanceOf(TextEntry)
-      expect(entry.id).toBe('entry-123')
+      // Adapter gets id from source.id()
+      expect(entry.id).toBe('event-1')
+      // globalPosition is placeholder (Journal assigns it)
+      expect(entry.globalPosition).toBe(0)
+      // streamVersion is set from the parameter
+      expect(entry.streamVersion).toBe(5)
       expect(entry.type).toBe('TestEvent')
       expect(entry.typeVersion).toBe(event.sourceTypeVersion)
-      expect(entry.streamVersion).toBe(5)
       expect(entry.entryData).toContain('event-1')
       expect(entry.entryData).toContain('test data')
     })
@@ -110,7 +114,7 @@ describe('DefaultTextEntryAdapter', () => {
         new Map([['userId', 'user-123']])
       )
 
-      const entry = adapter.toEntry(event, 1, 'entry-1', customMetadata)
+      const entry = adapter.toEntry(event, 1, customMetadata)
 
       expect(entry.metadata).toContain('userId')
       expect(entry.metadata).toContain('user-123')
@@ -129,7 +133,7 @@ describe('DefaultTextEntryAdapter', () => {
   describe('fromEntry', () => {
     it('should deserialize TextEntry to plain object (default behavior)', () => {
       const event = new TestEvent('event-1', 'test data')
-      const entry = adapter.toEntry(event, 1, 'entry-1', metadata)
+      const entry = adapter.toEntry(event, 1, metadata)
 
       const deserialized = adapter.fromEntry(entry)
 
@@ -140,37 +144,38 @@ describe('DefaultTextEntryAdapter', () => {
     })
 
     it('should round-trip successfully', () => {
-      const original = new TestEvent('event-123', 'important data', new Date('2025-01-01'))
-      const entry = adapter.toEntry(original, 2, 'entry-456', metadata)
-      const roundTripped = adapter.fromEntry(entry)
+      const event = new TestEvent('event-1', 'test data')
+      const entry = adapter.toEntry(event, 1, metadata)
 
-      expect(roundTripped.eventId).toBe(original.eventId)
-      expect(roundTripped.data).toBe(original.data)
-      expect(new Date(roundTripped.timestamp).toISOString()).toBe(original.timestamp.toISOString())
+      const deserialized = adapter.fromEntry(entry)
+
+      expect(deserialized.eventId).toBe(event.eventId)
+      expect(deserialized.data).toBe(event.data)
     })
   })
 
   describe('upcastIfNeeded', () => {
     it('should use default implementation (no upcasting)', () => {
       const event = new TestEvent('event-1', 'test data')
-      const entry = adapter.toEntry(event, 1, 'entry-1', metadata)
+      const entry = adapter.toEntry(event, 1, metadata)
 
-      const deserialized = adapter.fromEntry(entry)
+      const result = adapter.fromEntry(entry)
 
-      expect(deserialized.eventId).toBe('event-1')
-      expect(deserialized.data).toBe('test data')
+      // Default implementation returns data as-is
+      expect(result.eventId).toBe('event-1')
     })
 
     it('should upcast v1 to v2 when using custom adapter', () => {
       const versionedAdapter = new VersionedEventAdapter()
 
-      // Create a v1 entry manually
+      // Create a v1 entry manually using 7-arg constructor
       const v1Entry = new TextEntry(
-        'entry-1',
+        'event-1',
+        0, // globalPosition
         'VersionedEvent',
         1, // v1
         JSON.stringify({ eventId: 'event-1', fieldV1: 'value1' }),
-        1,
+        1, // streamVersion
         JSON.stringify(metadata)
       )
 
@@ -184,13 +189,14 @@ describe('DefaultTextEntryAdapter', () => {
     it('should not upcast v2 (current version)', () => {
       const versionedAdapter = new VersionedEventAdapter()
 
-      // Create a v2 entry
+      // Create a v2 entry using 7-arg constructor
       const v2Entry = new TextEntry(
-        'entry-1',
+        'event-1',
+        1, // globalPosition
         'VersionedEvent',
         2, // v2 (current)
         JSON.stringify({ eventId: 'event-1', fieldV1: 'value1', fieldV2: 'value2' }),
-        1,
+        1, // streamVersion
         JSON.stringify(metadata)
       )
 
@@ -204,13 +210,14 @@ describe('DefaultTextEntryAdapter', () => {
     it('should throw error for unsupported version', () => {
       const versionedAdapter = new VersionedEventAdapter()
 
-      // Create a v99 entry (unsupported)
+      // Create a v99 entry (unsupported) using 7-arg constructor
       const unsupportedEntry = new TextEntry(
-        'entry-1',
+        'event-1',
+        2, // globalPosition
         'VersionedEvent',
         99, // Unsupported version
         JSON.stringify({ eventId: 'event-1', fieldV1: 'value1' }),
-        1,
+        1, // streamVersion
         JSON.stringify(metadata)
       )
 

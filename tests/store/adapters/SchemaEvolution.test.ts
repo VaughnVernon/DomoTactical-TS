@@ -41,6 +41,7 @@ describe('Schema Evolution and Upcasting', () => {
       // Arrange: Create a v2 UserRegistered entry (current version with email)
       const v2Entry = new TextEntry(
         '1',
+        0, // globalPosition
         'UserRegistered',
         2, // Schema version 2
         JSON.stringify({
@@ -67,6 +68,7 @@ describe('Schema Evolution and Upcasting', () => {
       // Arrange: Create a v1 UserRegistered entry (old version without email)
       const v1Entry = new TextEntry(
         '1',
+        1, // globalPosition
         'UserRegistered',
         1, // Schema version 1 (old)
         JSON.stringify({
@@ -121,6 +123,7 @@ describe('Schema Evolution and Upcasting', () => {
       // Arrange: Create a v2 UserAuthenticated entry
       const v2Entry = new TextEntry(
         '2',
+        2, // globalPosition
         'UserAuthenticated',
         2, // Schema version 2
         JSON.stringify({
@@ -145,6 +148,7 @@ describe('Schema Evolution and Upcasting', () => {
       // Arrange: Create a v1 UserAuthenticated entry (no sessionId)
       const v1Entry = new TextEntry(
         '2',
+        3, // globalPosition
         'UserAuthenticated',
         1, // Schema version 1 (old)
         JSON.stringify({

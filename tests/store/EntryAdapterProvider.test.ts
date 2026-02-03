@@ -11,7 +11,7 @@ import { EntryAdapterProvider } from '../../src/store/EntryAdapterProvider'
 import { DefaultTextEntryAdapter } from '../../src/store/DefaultTextEntryAdapter'
 import { DomainEvent } from '../../src/model/DomainEvent'
 import { Metadata } from '../../src/store/Metadata'
-import { TextEntry } from '../../src/store/journal/TextEntry'
+import { TextEntry } from '../../src/store/TextEntry'
 
 // Test events
 class EventA extends DomainEvent {
@@ -185,6 +185,7 @@ describe('EntryAdapterProvider', () => {
       // Create entry manually with default adapter (no custom logic)
       const entry = new TextEntry(
         'entry-1',
+        0, // globalPosition
         'EventA',
         1,
         JSON.stringify({ data: 'test-data' }),

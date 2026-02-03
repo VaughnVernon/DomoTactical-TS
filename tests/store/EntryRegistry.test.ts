@@ -13,7 +13,7 @@ import { ContextProfile } from '../../src/store/ContextProfile'
 import { Source } from '../../src/store/Source'
 import { DomainEvent } from '../../src/model/DomainEvent'
 import { Command } from '../../src/model/Command'
-import { TextEntry } from '../../src/store/journal/TextEntry'
+import { TextEntry } from '../../src/store/TextEntry'
 import { Metadata } from '../../src/store/Metadata'
 
 // Test events
@@ -113,6 +113,7 @@ describe('EntryRegistry', () => {
 
       const entry = new TextEntry(
         'entry-1',
+        0, // globalPosition
         'OrderPlaced',
         1,
         JSON.stringify({ orderId: 'ord-001', customerId: 'cust-001', amount: 99.99, dateTimeSourced: Date.now(), sourceTypeVersion: 1 }),
@@ -135,6 +136,7 @@ describe('EntryRegistry', () => {
 
       const entry = new TextEntry(
         'entry-1',
+        1, // globalPosition
         'OrderPlaced',
         1,
         JSON.stringify({ orderId: 'ord-002', customerId: 'cust-002', amount: 50.00, dateTimeSourced: Date.now(), sourceTypeVersion: 1 }),
@@ -159,6 +161,7 @@ describe('EntryRegistry', () => {
       const dateStr = '2025-01-15T10:30:00.000Z'
       const entry = new TextEntry(
         'entry-1',
+        2, // globalPosition
         'OrderShipped',
         1,
         JSON.stringify({ orderId: 'ord-003', shippedAt: dateStr, trackingNumber: 'TRK123', dateTimeSourced: Date.now(), sourceTypeVersion: 1 }),
@@ -185,6 +188,7 @@ describe('EntryRegistry', () => {
       const updated = '2025-01-15T12:00:00.000Z'
       const entry = new TextEntry(
         'entry-1',
+        3, // globalPosition
         'OrderWithMultipleDates',
         1,
         JSON.stringify({ orderId: 'ord-004', createdAt: created, updatedAt: updated, dateTimeSourced: Date.now(), sourceTypeVersion: 1 }),
@@ -208,6 +212,7 @@ describe('EntryRegistry', () => {
 
       const entry = new TextEntry(
         'entry-1',
+        4, // globalPosition
         'OrderPlaced',
         1,
         JSON.stringify({ orderId: 'ord-005', customerId: 'cust-005', amount: '19.99', dateTimeSourced: Date.now(), sourceTypeVersion: 1 }),
@@ -227,6 +232,7 @@ describe('EntryRegistry', () => {
       const dateStr = '2025-01-20T15:00:00.000Z'
       const entry = new TextEntry(
         'entry-1',
+        5, // globalPosition
         'ProcessPayment',
         1,
         JSON.stringify({ paymentId: 'pay-001', amount: 100.00, processedAt: dateStr, dateTimeSourced: Date.now(), sourceTypeVersion: 1 }),

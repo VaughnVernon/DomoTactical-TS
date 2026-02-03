@@ -11,7 +11,7 @@ import { ContextProfile } from '../../src/store/ContextProfile'
 import { EntryAdapterProvider } from '../../src/store/EntryAdapterProvider'
 import { Source } from '../../src/store/Source'
 import { DomainEvent } from '../../src/model/DomainEvent'
-import { TextEntry } from '../../src/store/journal/TextEntry'
+import { TextEntry } from '../../src/store/TextEntry'
 import { Metadata } from '../../src/store/Metadata'
 
 // Test events for different contexts
@@ -171,6 +171,7 @@ describe('ContextProfile', () => {
       const dateStr = '2025-01-15T10:30:00.000Z'
       const entry = new TextEntry(
         'entry-1',
+        0, // globalPosition
         'FundsDeposited',
         1,
         JSON.stringify({

@@ -16,7 +16,7 @@ import {
 } from '../../src/model/projections'
 import { TestConfirmer } from '../../src/testkit'
 import { TextState } from '../../src/store/State'
-import { TextEntry } from '../../src/store/journal/TextEntry'
+import { TextEntry } from '../../src/store/TextEntry'
 import { Metadata } from '../../src/store/Metadata'
 
 /**
@@ -47,16 +47,20 @@ describe('Projection Core Components', () => {
 
     it('should create projectable from entries', () => {
       const entry1 = new TextEntry(
+        'acc-1',
         'AccountOpened',
         1,
         JSON.stringify({ accountId: 'acc-1', owner: 'Alice' }),
+        1,
         JSON.stringify(Metadata.nullMetadata())
       )
 
       const entry2 = new TextEntry(
+        'acc-1',
         'FundsDeposited',
         1,
         JSON.stringify({ accountId: 'acc-1', amount: 100 }),
+        2,
         JSON.stringify(Metadata.nullMetadata())
       )
 
@@ -317,11 +321,13 @@ describe('Projection Core Components', () => {
       const confirmer = new TestConfirmer()
       const control = new BasicProjectionControl(confirmer)
 
-      // Create projectable from entry
+      // Create projectable from entry (6-arg form: id, type, typeVersion, entryData, streamVersion, metadata)
       const entry = new TextEntry(
+        'acc-1',
         'AccountOpened',
         1,
         JSON.stringify({ accountId: 'acc-1', owner: 'Alice', initialBalance: 100 }),
+        1,
         JSON.stringify(Metadata.nullMetadata())
       )
 
@@ -365,9 +371,11 @@ describe('Projection Core Components', () => {
       const control = new BasicProjectionControl(confirmer)
 
       const entry = new TextEntry(
+        'bad-1',
         'BadEvent',
         1,
         'invalid json',
+        1,
         JSON.stringify(Metadata.nullMetadata())
       )
 
