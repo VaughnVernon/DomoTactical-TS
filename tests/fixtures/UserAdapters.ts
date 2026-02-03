@@ -22,10 +22,10 @@ export class UserRegisteredAdapter extends DefaultTextEntryAdapter<UserRegistere
   protected override upcastIfNeeded(
     data: any,
     type: string,
-    version: number
+    typeVersion: number
   ): UserRegistered {
     // v2 is current
-    if (version === 2) {
+    if (typeVersion === 2) {
       return new UserRegistered(
         data.userId,
         data.username,
@@ -35,7 +35,7 @@ export class UserRegisteredAdapter extends DefaultTextEntryAdapter<UserRegistere
     }
 
     // Upcast v1 → v2: Add default email
-    if (version === 1) {
+    if (typeVersion === 1) {
       return new UserRegistered(
         data.userId,
         data.username,
@@ -44,13 +44,12 @@ export class UserRegisteredAdapter extends DefaultTextEntryAdapter<UserRegistere
       )
     }
 
-    throw new Error(`Unsupported UserRegistered version: ${version}`)
+    throw new Error(`Unsupported UserRegistered typeVersion: ${typeVersion}`)
   }
 
   override toEntry(
     source: UserRegistered,
-    version: number,
-    id: string,
+    streamVersion: number,
     metadata: Metadata = Metadata.nullMetadata()
   ): TextEntry {
     const serialized = JSON.stringify({
@@ -60,12 +59,13 @@ export class UserRegisteredAdapter extends DefaultTextEntryAdapter<UserRegistere
       registeredAt: source.registeredAt.toISOString()
     })
 
+    // Use 6-arg constructor - Journal assigns globalPosition
     return new TextEntry(
-      id,
+      source.id(),
       'UserRegistered',
-      2, // Current version
+      2, // Current typeVersion
       serialized,
-      version,
+      streamVersion,
       JSON.stringify({
         value: metadata.value,
         operation: metadata.operation,
@@ -86,10 +86,10 @@ export class UserAuthenticatedAdapter extends DefaultTextEntryAdapter<UserAuthen
   protected override upcastIfNeeded(
     data: any,
     type: string,
-    version: number
+    typeVersion: number
   ): UserAuthenticated {
     // v2 is current
-    if (version === 2) {
+    if (typeVersion === 2) {
       return new UserAuthenticated(
         data.userId,
         data.sessionId,
@@ -98,7 +98,7 @@ export class UserAuthenticatedAdapter extends DefaultTextEntryAdapter<UserAuthen
     }
 
     // Upcast v1 → v2: Generate sessionId
-    if (version === 1) {
+    if (typeVersion === 1) {
       return new UserAuthenticated(
         data.userId,
         `legacy-session-${Date.now()}`, // v1 didn't have sessionId
@@ -106,13 +106,12 @@ export class UserAuthenticatedAdapter extends DefaultTextEntryAdapter<UserAuthen
       )
     }
 
-    throw new Error(`Unsupported UserAuthenticated version: ${version}`)
+    throw new Error(`Unsupported UserAuthenticated typeVersion: ${typeVersion}`)
   }
 
   override toEntry(
     source: UserAuthenticated,
-    version: number,
-    id: string,
+    streamVersion: number,
     metadata: Metadata = Metadata.nullMetadata()
   ): TextEntry {
     const serialized = JSON.stringify({
@@ -121,12 +120,13 @@ export class UserAuthenticatedAdapter extends DefaultTextEntryAdapter<UserAuthen
       authenticatedAt: source.authenticatedAt.toISOString()
     })
 
+    // Use 6-arg constructor - Journal assigns globalPosition
     return new TextEntry(
-      id,
+      source.id(),
       'UserAuthenticated',
-      2, // Current version
+      2, // Current typeVersion
       serialized,
-      version,
+      streamVersion,
       JSON.stringify({
         value: metadata.value,
         operation: metadata.operation,
@@ -142,8 +142,7 @@ export class UserAuthenticatedAdapter extends DefaultTextEntryAdapter<UserAuthen
 export class UserDeactivatedAdapter extends DefaultTextEntryAdapter<UserDeactivated> {
   override toEntry(
     source: UserDeactivated,
-    version: number,
-    id: string,
+    streamVersion: number,
     metadata: Metadata = Metadata.nullMetadata()
   ): TextEntry {
     const serialized = JSON.stringify({
@@ -152,12 +151,13 @@ export class UserDeactivatedAdapter extends DefaultTextEntryAdapter<UserDeactiva
       deactivatedAt: source.deactivatedAt.toISOString()
     })
 
+    // Use 6-arg constructor - Journal assigns globalPosition
     return new TextEntry(
-      id,
+      source.id(),
       'UserDeactivated',
-      1, // Version 1
+      1, // typeVersion
       serialized,
-      version,
+      streamVersion,
       JSON.stringify({
         value: metadata.value,
         operation: metadata.operation,
