@@ -21,6 +21,7 @@ export {
   DefaultTextEntryAdapter,
   EntryRegistry,
   ContextProfile,
+  StoreTypeMapper,
   Entry,
   TextEntry,
   Outcome,

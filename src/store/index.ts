@@ -18,6 +18,7 @@ export { StateAdapterProvider } from './StateAdapterProvider.js'
 export { DefaultTextEntryAdapter } from './DefaultTextEntryAdapter.js'
 export { EntryRegistry, type PropertyTransforms } from './EntryRegistry.js'
 export { ContextProfile, type SourceTypeSpec } from './ContextProfile.js'
+export { StoreTypeMapper } from './StoreTypeMapper.js'
 
 // Entry types (relocated from store/journal)
 export { Entry } from './Entry.js'
