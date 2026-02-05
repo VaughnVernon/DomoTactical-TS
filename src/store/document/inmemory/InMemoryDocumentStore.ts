@@ -12,6 +12,7 @@ import { Metadata } from '../../Metadata.js'
 import { TextState } from '../../State.js'
 import { Result } from '../../Result.js'
 import { StorageException } from '../../StorageException.js'
+import { StateAdapterProvider } from '../../StateAdapterProvider.js'
 import {
   DocumentStore,
   DocumentBundle,
@@ -52,6 +53,9 @@ export class InMemoryDocumentStore extends Actor implements DocumentStore {
 
   /** Sources/events storage: id -> Source[] */
   private readonly sources = new Map<string, Source<any>[]>()
+
+  /** Adapter provider for State serialization/deserialization */
+  private readonly adapterProvider = StateAdapterProvider.instance()
 
   /**
    * Construct an InMemoryDocumentStore.
@@ -120,8 +124,8 @@ export class InMemoryDocumentStore extends Actor implements DocumentStore {
       }
     }
 
-    // Parse the state from TextState
-    const state = JSON.parse(raw.data) as S
+    // Use StateAdapterProvider to deserialize (with potential upcasting)
+    const state = this.adapterProvider.fromRawState<S, TextState>(raw, type)
 
     return {
       outcome: {
@@ -212,13 +216,10 @@ export class InMemoryDocumentStore extends Actor implements DocumentStore {
         this.store.set(type, typeStore)
       }
 
-      // Create TextState representation
-      // Note: Using Object as type since we store type name separately
-      const raw = new TextState(
+      // Use StateAdapterProvider to serialize (with schema versioning)
+      const raw = this.adapterProvider.asRawState<S, TextState>(
         id,
-        Object, // type constructor
-        1, // typeVersion - always 1 for now
-        JSON.stringify(state),
+        state,
         stateVersion,
         metadata
       )
