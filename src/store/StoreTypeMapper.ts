@@ -212,11 +212,19 @@ export class StoreTypeMapper {
    * - 'xml-parser' → 'XmlParser'
    * - 'name' → 'Name'
    *
+   * Note: If the string contains no hyphens and already has uppercase letters
+   * (looks like PascalCase), it's returned as-is to avoid mangling.
+   *
    * @param str the kebab-case string
    * @returns string the PascalCase string
    */
   private kebabToPascal(str: string): string {
     if (!str) return str
+
+    // If no hyphens and already has uppercase (looks like PascalCase), return as-is
+    if (!str.includes('-') && /[A-Z]/.test(str)) {
+      return str
+    }
 
     // Split on hyphens, capitalize each part, join
     return str
