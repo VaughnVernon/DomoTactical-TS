@@ -12,6 +12,7 @@ import { TextEntry } from './TextEntry.js'
 import { EntryAdapter } from './EntryAdapter.js'
 import { DefaultTextEntryAdapter } from './DefaultTextEntryAdapter.js'
 import { Metadata } from './Metadata.js'
+import { StoreTypeMapper } from './StoreTypeMapper.js'
 // Note: Circular import with ContextProfile is safe because we only
 // access it at runtime inside defaultProvider(), not at module load time.
 import { ContextProfile } from './ContextProfile.js'
@@ -134,15 +135,18 @@ export class EntryAdapterProvider {
    * Convert Source to Entry using registered or default adapter.
    *
    * This is the primary method used by Journal.append() to serialize Sources.
+   * The adapter is responsible for mapping type names to symbolic names via
+   * StoreTypeMapper (see DefaultTextEntryAdapter for reference implementation).
    *
    * @param source the Source to convert
    * @param version the stream version
    * @param metadata optional metadata
-   * @returns Entry the serialized entry
+   * @returns Entry the serialized entry with symbolic type name
    *
    * @example
    * ```typescript
    * const entry = provider.asEntry(accountOpenedEvent, 1, metadata)
+   * // entry.type will be 'account-opened' (mapped by adapter via StoreTypeMapper)
    * ```
    */
   asEntry<S extends Source<any>>(
@@ -150,6 +154,7 @@ export class EntryAdapterProvider {
     streamVersion: number,
     metadata: Metadata = Metadata.nullMetadata()
   ): Entry<any> {
+    // Adapter lookup uses constructor.name since adapters are registered by class
     const adapter = this.adapters.get(source.constructor.name)
     if (adapter) {
       return adapter.toEntry(source, streamVersion, metadata)
@@ -187,8 +192,9 @@ export class EntryAdapterProvider {
    * Convert Entry to Source using registered or default adapter.
    *
    * This is the primary method used by StreamReader to deserialize Entries.
-   * If an Entry represents an old schema version, the adapter's upcasting
-   * logic will be applied automatically.
+   * The entry type is mapped from symbolic name to type name using StoreTypeMapper
+   * before looking up the adapter. If an Entry represents an old schema version,
+   * the adapter's upcasting logic will be applied automatically.
    *
    * @param entry the Entry to convert
    * @returns Source the deserialized source
@@ -196,11 +202,14 @@ export class EntryAdapterProvider {
    * @example
    * ```typescript
    * const event = provider.asSource(entry)
+   * // entry.type 'account-opened' is mapped to 'AccountOpened' for adapter lookup
    * // Returns AccountOpened instance, potentially upcasted from old version
    * ```
    */
   asSource<S extends Source<any>>(entry: Entry<any>): S {
-    const adapter = this.adapters.get(entry.type)
+    // Map symbolic type back to type name for adapter lookup
+    const typeName = StoreTypeMapper.instance().toTypeName(entry.type)
+    const adapter = this.adapters.get(typeName)
     if (adapter) {
       return adapter.fromEntry(entry) as S
     }

@@ -10,6 +10,7 @@ import { State, TextState } from './State.js'
 import { StateAdapter } from './StateAdapter.js'
 import { DefaultTextStateAdapter } from './DefaultTextStateAdapter.js'
 import { Metadata } from './Metadata.js'
+import { StoreTypeMapper } from './StoreTypeMapper.js'
 
 /**
  * Registry for StateAdapter instances.
@@ -101,16 +102,19 @@ export class StateAdapterProvider {
    * Convert native state to raw State using registered or default adapter.
    *
    * This is the primary method used by DocumentStore.write() to serialize state.
+   * The adapter is responsible for mapping type names to symbolic names via
+   * StoreTypeMapper (see DefaultTextStateAdapter for reference implementation).
    *
    * @param id the state identity
    * @param state the native state
    * @param stateVersion the version number
    * @param metadata optional metadata
-   * @returns RS the raw State instance
+   * @returns RS the raw State instance with symbolic type name
    *
    * @example
    * ```typescript
    * const rawState = provider.asRawState('account-123', accountState, 1, metadata)
+   * // rawState.type will be 'account-state' (mapped by adapter via StoreTypeMapper)
    * ```
    */
   asRawState<S, RS extends State<any>>(
@@ -135,21 +139,25 @@ export class StateAdapterProvider {
    * Convert raw State to native state using registered or default adapter.
    *
    * This is the primary method used by DocumentStore.read() to deserialize state.
-   * If the State represents an old schema version, the adapter's upcasting
-   * logic will be applied automatically.
+   * The state type is mapped from symbolic name to type name using StoreTypeMapper
+   * before looking up the adapter. If the State represents an old schema version,
+   * the adapter's upcasting logic will be applied automatically.
    *
    * @param raw the raw State instance
-   * @param stateType optional state type name
+   * @param stateType optional state type name (will be mapped from symbolic if needed)
    * @returns S the native state
    *
    * @example
    * ```typescript
-   * const state = provider.fromRawState(rawState, 'AccountState')
+   * const state = provider.fromRawState(rawState, 'account-state')
+   * // 'account-state' is mapped to 'AccountState' for adapter lookup
    * // Returns AccountState instance, potentially upcasted from old version
    * ```
    */
   fromRawState<S, RS extends State<any>>(raw: RS, stateType?: string): S {
-    const typeName = stateType || raw.type || 'Object'
+    const rawTypeName = stateType || raw.type || 'Object'
+    // Map symbolic type back to type name for adapter lookup
+    const typeName = StoreTypeMapper.instance().toTypeName(rawTypeName)
     const adapter = this.adapters.get(typeName)
 
     if (adapter) {
