@@ -39,7 +39,8 @@ import { Metadata } from './Metadata.js'
  *
  *   toRawState(id: string, state: AccountState, stateVersion: number, metadata: Metadata): TextState {
  *     const data = JSON.stringify({ accountId: state.accountId, balance: state.balance, accountType: state.accountType })
- *     return new TextState(id, AccountState, 2, data, stateVersion, metadata)
+ *     // Type is a string - adapter decides what name to use (PascalCase or kebab-case)
+ *     return new TextState(id, 'account-state', 2, data, stateVersion, metadata)
  *   }
  * }
  * ```
@@ -110,7 +111,7 @@ export interface StateAdapter<S, RS extends State<any>> {
    *   // Map type name to symbolic name for storage
    *   const symbolicType = StoreTypeMapper.instance().toSymbolicName(state.constructor.name)
    *   const data = JSON.stringify({ accountId: state.accountId, balance: state.balance })
-   *   return new TextState(id, AccountState, 2, data, stateVersion, metadata, symbolicType)
+   *   return new TextState(id, symbolicType, 2, data, stateVersion, metadata)
    * }
    * ```
    */
