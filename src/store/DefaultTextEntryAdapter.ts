@@ -10,6 +10,7 @@ import { Source } from './Source.js'
 import { EntryAdapter } from './EntryAdapter.js'
 import { TextEntry } from './TextEntry.js'
 import { Metadata } from './Metadata.js'
+import { StoreTypeMapper } from './StoreTypeMapper.js'
 
 /**
  * Default adapter for JSON/text-based Entry serialization.
@@ -18,6 +19,7 @@ import { Metadata } from './Metadata.js'
  * This adapter:
  * - Serializes Source instances to JSON strings
  * - Deserializes JSON strings back to Source instances
+ * - Maps type names to symbolic names via StoreTypeMapper (e.g., 'AccountOpened' → 'account-opened')
  * - Provides a hook for schema evolution via upcastIfNeeded
  * - Can be extended to implement custom upcasting logic
  *
@@ -28,6 +30,7 @@ import { Metadata } from './Metadata.js'
  * // Use default adapter (no upcasting)
  * const adapter = new DefaultTextEntryAdapter<AccountOpened>()
  * const entry = adapter.toEntry(event, 1, metadata)
+ * // entry.type will be 'account-opened' (mapped via StoreTypeMapper)
  * const event2 = adapter.fromEntry(entry)
  *
  * // Extend for custom upcasting
@@ -51,7 +54,8 @@ export class DefaultTextEntryAdapter<S extends Source<any>>
    * Convert Entry to Source (deserialization + potential upcasting).
    *
    * Deserializes the JSON data from the Entry and optionally upcasts it
-   * if it's an older schema version.
+   * if it's an older schema version. The entry's symbolic type (e.g., 'account-opened')
+   * is mapped back to the type name (e.g., 'AccountOpened') before passing to upcastIfNeeded().
    *
    * @param entry the TextEntry to convert from
    * @returns S the native Source instance
@@ -60,8 +64,11 @@ export class DefaultTextEntryAdapter<S extends Source<any>>
     // Deserialize from JSON
     const data = JSON.parse(entry.entryData)
 
+    // Map symbolic type back to type name for upcasting logic
+    const typeName = StoreTypeMapper.instance().toTypeName(entry.type)
+
     // Potential upcast from old schema version to current
-    return this.upcastIfNeeded(data, entry.type, entry.typeVersion)
+    return this.upcastIfNeeded(data, typeName, entry.typeVersion)
   }
 
   /**
@@ -89,6 +96,9 @@ export class DefaultTextEntryAdapter<S extends Source<any>>
    *
    * Creates a TextEntry using the 6-arg constructor (without globalPosition).
    * The Journal assigns globalPosition when appending to the journal.
+   *
+   * The type name is mapped to a symbolic name via StoreTypeMapper
+   * (e.g., 'AccountOpened' → 'account-opened').
    */
   toEntry(
     source: S,
@@ -98,13 +108,16 @@ export class DefaultTextEntryAdapter<S extends Source<any>>
     const serialized = JSON.stringify(source)
     const id = source.id()
 
+    // Map type name to symbolic name for storage
+    const symbolicType = StoreTypeMapper.instance().toSymbolicName(source.typeName())
+
     // Check if this is the 2-arg overload (source, metadata?)
     if (typeof streamVersionOrMetadata !== 'number') {
       const actualMetadata = streamVersionOrMetadata || Metadata.nullMetadata()
       // Use 6-arg form with streamVersion=0 as placeholder
       return new TextEntry(
         id,
-        source.typeName(),
+        symbolicType,
         source.sourceTypeVersion,
         serialized,
         0, // Placeholder streamVersion for 2-arg overload
@@ -122,7 +135,7 @@ export class DefaultTextEntryAdapter<S extends Source<any>>
 
     return new TextEntry(
       id,
-      source.typeName(),
+      symbolicType,
       source.sourceTypeVersion,
       serialized,
       streamVersion,
@@ -143,7 +156,7 @@ export class DefaultTextEntryAdapter<S extends Source<any>>
    * The default implementation does no upcasting and returns data as-is.
    *
    * @param data the deserialized data from JSON
-   * @param type the Source type name (e.g., "AccountOpened")
+   * @param type the Source type name (e.g., 'AccountOpened') - already mapped from symbolic
    * @param typeVersion the schema version from the Entry (for evolution)
    * @returns S the upcasted Source instance
    *
