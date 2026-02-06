@@ -12,6 +12,10 @@ import { Metadata } from './Metadata.js'
  * Abstract base class for state persistence.
  * State can be stored as Binary (Uint8Array), Text (string), or Object (any).
  *
+ * The `type` field contains the type name as provided by the adapter. The adapter
+ * is responsible for type name mapping (e.g., using StoreTypeMapper to convert
+ * between PascalCase and kebab-case). This mirrors how Entry works.
+ *
  * @template T the type of data being stored
  */
 export abstract class State<T> {
@@ -34,7 +38,7 @@ export abstract class State<T> {
   /** Associated metadata */
   public readonly metadata: Metadata
 
-  /** The type name of the state */
+  /** The type name of the state (as provided by the adapter) */
   public readonly type: string
 
   /** The version of the type */
@@ -43,7 +47,7 @@ export abstract class State<T> {
   /**
    * Construct a State instance.
    * @param id the unique identifier (must not be null)
-   * @param type the class or constructor function representing the type
+   * @param type the type name (as string, e.g., 'AccountState' or 'account-state')
    * @param typeVersion the version of the type (must be greater than 0)
    * @param data the data payload (must not be null)
    * @param dataVersion the version of the data (must be greater than 0)
@@ -51,7 +55,7 @@ export abstract class State<T> {
    */
   protected constructor(
     id: string,
-    type: Function,
+    type: string,
     typeVersion: number,
     data: T,
     dataVersion: number,
@@ -60,8 +64,8 @@ export abstract class State<T> {
     if (id !== State.NoOp && !id) throw new Error('State id must not be null or empty')
     this.id = id
 
-    if (!type) throw new Error('State type must not be null')
-    this.type = type.name
+    if (!type) throw new Error('State type must not be null or empty')
+    this.type = type
 
     if (typeVersion <= 0) throw new Error('State typeVersion must be greater than 0')
     this.typeVersion = typeVersion
@@ -233,7 +237,7 @@ export class BinaryState extends State<Uint8Array> {
 
   constructor(
     id: string,
-    type: Function,
+    type: string,
     typeVersion: number,
     data: Uint8Array,
     dataVersion: number,
@@ -242,11 +246,11 @@ export class BinaryState extends State<Uint8Array> {
   constructor()
   constructor(...args: unknown[]) {
     if (args.length === 0) {
-      super(State.NoOp, Object, 1, new Uint8Array(0), 1, Metadata.nullMetadata())
+      super(State.NoOp, 'Object', 1, new Uint8Array(0), 1, Metadata.nullMetadata())
     } else {
       const [id, type, typeVersion, data, dataVersion, metadata] = args as [
         string,
-        Function,
+        string,
         number,
         Uint8Array,
         number,
@@ -279,7 +283,7 @@ export class ObjectState<T> extends State<T> {
 
   constructor(
     id: string,
-    type: Function,
+    type: string,
     typeVersion: number,
     data: T,
     dataVersion: number,
@@ -288,11 +292,11 @@ export class ObjectState<T> extends State<T> {
   constructor()
   constructor(...args: unknown[]) {
     if (args.length === 0) {
-      super(State.NoOp, Object, 1, Object.freeze({}) as T, 1, Metadata.nullMetadata())
+      super(State.NoOp, 'Object', 1, Object.freeze({}) as T, 1, Metadata.nullMetadata())
     } else {
       const [id, type, typeVersion, data, dataVersion, metadata] = args as [
         string,
-        Function,
+        string,
         number,
         T,
         number,
@@ -324,7 +328,7 @@ export class TextState extends State<string> {
 
   constructor(
     id: string,
-    type: Function,
+    type: string,
     typeVersion: number,
     data: string,
     dataVersion: number,
@@ -333,11 +337,11 @@ export class TextState extends State<string> {
   constructor()
   constructor(...args: unknown[]) {
     if (args.length === 0) {
-      super(State.NoOp, Object, 1, '', 1, Metadata.nullMetadata())
+      super(State.NoOp, 'Object', 1, '', 1, Metadata.nullMetadata())
     } else {
       const [id, type, typeVersion, data, dataVersion, metadata] = args as [
         string,
-        Function,
+        string,
         number,
         string,
         number,
