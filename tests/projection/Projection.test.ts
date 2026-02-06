@@ -27,7 +27,7 @@ describe('Projection Core Components', () => {
     it('should create projectable from state', () => {
       const state = new TextState(
         'account-1',
-        Object,
+        'Object',
         1,
         JSON.stringify({ balance: 100 }),
         5,
@@ -78,7 +78,7 @@ describe('Projection Core Components', () => {
     it('should provide text data access', () => {
       const state = new TextState(
         'account-1',
-        Object,
+        'Object',
         1,
         JSON.stringify({ balance: 100, owner: 'Alice' }),
         1,
@@ -98,7 +98,7 @@ describe('Projection Core Components', () => {
     it('should provide bytes data access', () => {
       const state = new TextState(
         'account-1',
-        Object,
+        'Object',
         1,
         'test data',
         1,
@@ -134,7 +134,7 @@ describe('Projection Core Components', () => {
 
       const state = new TextState(
         'account-1',
-        Object,
+        'Object',
         1,
         'data',
         1,
@@ -158,7 +158,7 @@ describe('Projection Core Components', () => {
 
       const state = new TextState(
         'account-1',
-        Object,
+        'Object',
         1,
         'data',
         5,
@@ -229,9 +229,9 @@ describe('Projection Core Components', () => {
     })
 
     it('should handle multiple different projectables', async () => {
-      const state1 = new TextState('id-1', Object, 1, 'data1', 1, Metadata.nullMetadata())
-      const state2 = new TextState('id-2', Object, 1, 'data2', 1, Metadata.nullMetadata())
-      const state3 = new TextState('id-3', Object, 1, 'data3', 1, Metadata.nullMetadata())
+      const state1 = new TextState('id-1', 'Object', 1, 'data1', 1, Metadata.nullMetadata())
+      const state2 = new TextState('id-2', 'Object', 1, 'data2', 1, Metadata.nullMetadata())
+      const state3 = new TextState('id-3', 'Object', 1, 'data3', 1, Metadata.nullMetadata())
 
       const proj1 = new TextProjectable(state1, [], 'Test')
       const proj2 = new TextProjectable(state2, [], 'Test')
@@ -264,7 +264,7 @@ describe('Projection Core Components', () => {
 
       const state = new TextState(
         'account-1',
-        Object,
+        'Object',
         1,
         'data',
         1,

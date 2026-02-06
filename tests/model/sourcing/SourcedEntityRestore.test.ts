@@ -377,7 +377,7 @@ describe('SourcedEntity Restoration', () => {
     // So balance=1500 (1000 + 500) and adjustmentCount=1 (one BalanceAdjusted event)
     const snapshot = new TextState(
       'account-003',
-      Object,
+      'Object',
       1,
       JSON.stringify({
         accountId: 'account-003',

@@ -95,13 +95,13 @@ describe('JournalReader', () => {
       // Read first 2 entries
       const entries1 = await reader.readNext(2)
       expect(entries1).toHaveLength(2)
-      expect(entries1[0].type).toBe('TestEvent')
-      expect(entries1[1].type).toBe('TestEvent')
+      expect(entries1[0].type).toBe('test-event')
+      expect(entries1[1].type).toBe('test-event')
 
       // Read next entry
       const entries2 = await reader.readNext(1)
       expect(entries2).toHaveLength(1)
-      expect(entries2[0].type).toBe('TestEvent')
+      expect(entries2[0].type).toBe('test-event')
 
       // No more entries
       const entries3 = await reader.readNext(10)

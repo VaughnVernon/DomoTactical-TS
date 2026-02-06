@@ -103,7 +103,8 @@ describe('EntryAdapterProvider', () => {
 
       const entry = provider.asEntry(event, 1, metadata)
 
-      expect(entry.type).toBe('EventA')
+      // Type is mapped to kebab-case symbolic name
+      expect(entry.type).toBe('event-a')
       expect(entry.entryData).toContain('test-data')
       expect(entry.entryData).not.toContain('-custom') // Not using custom adapter
     })
@@ -116,7 +117,8 @@ describe('EntryAdapterProvider', () => {
 
       const entry = provider.asEntry(event, 1, metadata)
 
-      expect(entry.type).toBe('EventA')
+      // Type is mapped to kebab-case symbolic name
+      expect(entry.type).toBe('event-a')
       expect(entry.entryData).toContain('test-data')
     })
 
@@ -128,8 +130,9 @@ describe('EntryAdapterProvider', () => {
       const entryA = provider.asEntry(eventA, 1, metadata)
       const entryB = provider.asEntry(eventB, 2, metadata)
 
-      expect(entryA.type).toBe('EventA')
-      expect(entryB.type).toBe('EventB')
+      // Types are mapped to kebab-case symbolic names
+      expect(entryA.type).toBe('event-a')
+      expect(entryB.type).toBe('event-b')
       expect(entryA.entryData).toContain('data-a')
       expect(entryB.entryData).toContain('42')
     })

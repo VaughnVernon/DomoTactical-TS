@@ -159,15 +159,16 @@ describe('CQRS Projection Pipeline Integration', () => {
     )
 
     // Register projections with dispatcher
+    // Note: Use kebab-case symbolic names to match stored entry types
     await dispatcher.register(new ProjectToDescription(
       userProfileProjection,
-      ['UserRegistered', 'UserAuthenticated', 'UserDeactivated'],
+      ['user-registered', 'user-authenticated', 'user-deactivated'],
       'User profile projection'
     ))
 
     await dispatcher.register(new ProjectToDescription(
       userActivityStatsProjection,
-      ['UserRegistered', 'UserAuthenticated'],
+      ['user-registered', 'user-authenticated'],
       'User activity statistics projection'
     ))
 

@@ -6,7 +6,7 @@
 // See: LICENSE.md in repository root directory
 // See: https://opensource.org/license/rpl-1-5
 
-import { DefaultTextEntryAdapter } from 'domo-tactical/store'
+import { DefaultTextEntryAdapter, StoreTypeMapper } from 'domo-tactical/store'
 import { TextEntry } from 'domo-tactical/store/journal'
 import { Metadata } from 'domo-tactical/store'
 import { UserRegistered, UserAuthenticated, UserDeactivated } from './UserEvents'
@@ -60,9 +60,11 @@ export class UserRegisteredAdapter extends DefaultTextEntryAdapter<UserRegistere
     })
 
     // Use 6-arg constructor - Journal assigns globalPosition
+    // Map type name to symbolic name for storage (best practice)
+    const symbolicType = StoreTypeMapper.instance().toSymbolicName('UserRegistered')
     return new TextEntry(
       source.id(),
-      'UserRegistered',
+      symbolicType,
       2, // Current typeVersion
       serialized,
       streamVersion,
@@ -121,9 +123,11 @@ export class UserAuthenticatedAdapter extends DefaultTextEntryAdapter<UserAuthen
     })
 
     // Use 6-arg constructor - Journal assigns globalPosition
+    // Map type name to symbolic name for storage (best practice)
+    const symbolicType = StoreTypeMapper.instance().toSymbolicName('UserAuthenticated')
     return new TextEntry(
       source.id(),
-      'UserAuthenticated',
+      symbolicType,
       2, // Current typeVersion
       serialized,
       streamVersion,
@@ -152,9 +156,11 @@ export class UserDeactivatedAdapter extends DefaultTextEntryAdapter<UserDeactiva
     })
 
     // Use 6-arg constructor - Journal assigns globalPosition
+    // Map type name to symbolic name for storage (best practice)
+    const symbolicType = StoreTypeMapper.instance().toSymbolicName('UserDeactivated')
     return new TextEntry(
       source.id(),
-      'UserDeactivated',
+      symbolicType,
       1, // typeVersion
       serialized,
       streamVersion,

@@ -319,7 +319,7 @@ describe('InMemoryJournal', () => {
       const reader = await journal.streamReader('test')
       const stream = await reader.streamFor('stream-1')
 
-      expect(stream.entries[0].type).toBe('TestEvent')
+      expect(stream.entries[0].type).toBe('test-event')
       expect(stream.entries).toHaveLength(3)
     })
   })

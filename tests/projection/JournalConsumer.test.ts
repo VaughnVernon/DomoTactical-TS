@@ -231,15 +231,15 @@ describe('JournalConsumerActor', () => {
     const projectables = await projectionActor.getProjectables()
     expect(projectables).toHaveLength(2)
 
-    // Verify first entry
-    expect(projectables[0].becauseOf()).toContain('AccountOpened')
+    // Verify first entry (type is mapped to kebab-case)
+    expect(projectables[0].becauseOf()).toContain('account-opened')
     expect(projectables[0].entries()).toHaveLength(1)
-    expect(projectables[0].entries()[0].type).toBe('AccountOpened')
+    expect(projectables[0].entries()[0].type).toBe('account-opened')
 
-    // Verify second entry
-    expect(projectables[1].becauseOf()).toContain('FundsDeposited')
+    // Verify second entry (type is mapped to kebab-case)
+    expect(projectables[1].becauseOf()).toContain('funds-deposited')
     expect(projectables[1].entries()).toHaveLength(1)
-    expect(projectables[1].entries()[0].type).toBe('FundsDeposited')
+    expect(projectables[1].entries()[0].type).toBe('funds-deposited')
   })
 
   it('should handle batch reading', async () => {

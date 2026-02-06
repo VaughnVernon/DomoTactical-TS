@@ -83,7 +83,7 @@ describe('DefaultTextEntryAdapter', () => {
       const entry = adapter.toEntry(event, metadata)
 
       expect(entry).toBeInstanceOf(TextEntry)
-      expect(entry.type).toBe('TestEvent')
+      expect(entry.type).toBe('test-event')
       expect(entry.typeVersion).toBe(event.sourceTypeVersion)
       expect(entry.entryData).toContain('event-1')
       expect(entry.entryData).toContain('test data')
@@ -102,7 +102,7 @@ describe('DefaultTextEntryAdapter', () => {
       expect(entry.globalPosition).toBe(0)
       // streamVersion is set from the parameter
       expect(entry.streamVersion).toBe(5)
-      expect(entry.type).toBe('TestEvent')
+      expect(entry.type).toBe('test-event')
       expect(entry.typeVersion).toBe(event.sourceTypeVersion)
       expect(entry.entryData).toContain('event-1')
       expect(entry.entryData).toContain('test data')

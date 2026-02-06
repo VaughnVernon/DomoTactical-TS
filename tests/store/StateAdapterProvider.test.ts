@@ -71,7 +71,8 @@ class AccountStateAdapter implements StateAdapter<AccountState, TextState> {
       accountType: state.accountType
     })
 
-    return new TextState(id || state.accountId, AccountState, this.typeVersion(), data, stateVersion, meta)
+    // Custom adapters can use any type name - here we use kebab-case for consistency
+    return new TextState(id || state.accountId, 'account-state', this.typeVersion(), data, stateVersion, meta)
   }
 }
 
@@ -202,7 +203,7 @@ describe('StateAdapterProvider', () => {
         balance: 2000,
         accountType: 'savings'
       })
-      const rawState = new TextState('acc-456', AccountState, 2, rawData, 5)
+      const rawState = new TextState('acc-456', 'AccountState', 2, rawData, 5)
 
       const state = provider.fromRawState<AccountState, TextState>(
         rawState,
@@ -223,7 +224,7 @@ describe('StateAdapterProvider', () => {
         accountId: 'acc-789',
         balance: 500
       })
-      const rawState = new TextState('acc-789', AccountState, 1, rawData, 1)
+      const rawState = new TextState('acc-789', 'AccountState', 1, rawData, 1)
 
       const state = provider.fromRawState<AccountState, TextState>(
         rawState,
@@ -239,7 +240,7 @@ describe('StateAdapterProvider', () => {
       const provider = StateAdapterProvider.instance()
 
       const rawData = JSON.stringify({ key: 'value' })
-      const rawState = new TextState('id-1', Object, 1, rawData, 1)
+      const rawState = new TextState('id-1', 'Object', 1, rawData, 1)
 
       const state = provider.fromRawState<{ key: string }, TextState>(rawState)
 
@@ -255,7 +256,7 @@ describe('StateAdapterProvider', () => {
         balance: 100,
         accountType: 'checking'
       })
-      const rawState = new TextState('acc-100', AccountState, 2, rawData, 1)
+      const rawState = new TextState('acc-100', 'AccountState', 2, rawData, 1)
 
       const state = provider.fromRawState<AccountState, TextState>(rawState)
 

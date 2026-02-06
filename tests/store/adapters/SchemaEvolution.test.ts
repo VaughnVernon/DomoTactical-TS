@@ -108,7 +108,7 @@ describe('Schema Evolution and Upcasting', () => {
       )
 
       // Assert: Written as v2
-      expect(entry.type).toBe('UserRegistered')
+      expect(entry.type).toBe('user-registered')
       expect(entry.typeVersion).toBe(2) // Current version
 
       const data = JSON.parse(entry.entryData as string)
@@ -181,7 +181,7 @@ describe('Schema Evolution and Upcasting', () => {
       const entry = provider.asEntry(event, 2, Metadata.nullMetadata())
 
       // Assert
-      expect(entry.type).toBe('UserAuthenticated')
+      expect(entry.type).toBe('user-authenticated')
       expect(entry.typeVersion).toBe(2)
 
       const data = JSON.parse(entry.entryData as string)

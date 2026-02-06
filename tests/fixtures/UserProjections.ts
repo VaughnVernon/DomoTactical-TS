@@ -44,15 +44,15 @@ export class UserProfileProjection extends Actor implements Projection {
       const userId = eventData.userId
 
       switch (eventType) {
-        case 'UserRegistered':
+        case 'user-registered':
           await this.handleUserRegistered(userId, eventData)
           break
 
-        case 'UserAuthenticated':
+        case 'user-authenticated':
           await this.handleUserAuthenticated(userId, eventData)
           break
 
-        case 'UserDeactivated':
+        case 'user-deactivated':
           await this.handleUserDeactivated(userId)
           break
 
@@ -126,11 +126,11 @@ export class UserActivityStatsProjection extends Actor implements Projection {
       const eventType = entry.type
 
       switch (eventType) {
-        case 'UserRegistered':
+        case 'user-registered':
           await this.incrementTotalUsers()
           break
 
-        case 'UserAuthenticated':
+        case 'user-authenticated':
           await this.incrementTotalSessions()
           break
 
