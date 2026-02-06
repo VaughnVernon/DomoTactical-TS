@@ -138,7 +138,7 @@ export class InMemoryJournal<T> extends Actor implements Journal<T> {
         this.snapshots.set(streamName, snapshot as State<unknown>)
       } else {
         // Wrap in ObjectState
-        const objectState = new ObjectState(streamName, Object, 1, snapshot, actualVersion)
+        const objectState = new ObjectState(streamName, 'Object', 1, snapshot, actualVersion)
         this.snapshots.set(streamName, objectState)
       }
     }
@@ -231,7 +231,7 @@ export class InMemoryJournal<T> extends Actor implements Journal<T> {
         this.snapshots.set(streamName, snapshot as State<unknown>)
       } else {
         // Wrap in ObjectState
-        const objectState = new ObjectState(streamName, Object, 1, snapshot, finalVersion)
+        const objectState = new ObjectState(streamName, 'Object', 1, snapshot, finalVersion)
         this.snapshots.set(streamName, objectState)
       }
     }
