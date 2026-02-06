@@ -94,13 +94,25 @@ export interface StateAdapter<S, RS extends State<any>> {
   /**
    * Convert native state to raw State (serialization).
    *
-   * This is the primary serialization method used by DocumentStore.
+   * This is the primary serialization method. The adapter is responsible for
+   * mapping the type name to symbolic name using StoreTypeMapper. See
+   * DefaultTextStateAdapter for the reference implementation.
    *
    * @param id the state identity
    * @param state the native state
    * @param stateVersion the version number
    * @param metadata optional metadata (defaults to null metadata)
-   * @returns RS the raw State instance
+   * @returns RS the raw State instance with symbolic type name
+   *
+   * @example
+   * ```typescript
+   * toRawState(id: string, state: AccountState, stateVersion: number, metadata: Metadata): TextState {
+   *   // Map type name to symbolic name for storage
+   *   const symbolicType = StoreTypeMapper.instance().toSymbolicName(state.constructor.name)
+   *   const data = JSON.stringify({ accountId: state.accountId, balance: state.balance })
+   *   return new TextState(id, AccountState, 2, data, stateVersion, metadata, symbolicType)
+   * }
+   * ```
    */
   toRawState(id: string, state: S, stateVersion: number, metadata?: Metadata): RS
 
