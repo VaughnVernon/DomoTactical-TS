@@ -5,6 +5,167 @@ All notable changes to DomoTactical-TS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-02-05
+
+### Added
+
+#### StoreTypeMapper - Storage Type Name Mapping
+
+New `StoreTypeMapper` class provides bidirectional mapping between type/class names and symbolic storage names. This enables storage abstraction and protects against class renaming.
+
+**Key Features:**
+- Single registration creates bidirectional mapping (type ↔ symbolic)
+- Convention-based fallback (PascalCase ↔ kebab-case) when no mapping registered
+- Works for both Entry types (events/commands) and State types (documents)
+- Fluent API for chaining registrations
+
+**Usage:**
+
+```typescript
+import { StoreTypeMapper } from 'domo-tactical'
+
+const mapper = StoreTypeMapper.instance()
+
+// Register explicit bidirectional mappings
+mapper
+  .mapping('AccountOpened', 'account-opened')
+  .mapping('FundsDeposited', 'funds-deposited')
+  .mapping('AccountSummary', 'account-summary')
+
+// Convert type name to symbolic name (for writing)
+mapper.toSymbolicName('AccountOpened')  // 'account-opened'
+
+// Convert symbolic name to type name (for reading)
+mapper.toTypeName('account-opened')     // 'AccountOpened'
+```
+
+**Convention-Based Fallback (no registration needed):**
+
+```typescript
+mapper.toSymbolicName('UserRegistered')  // 'user-registered'
+mapper.toTypeName('user-registered')     // 'UserRegistered'
+mapper.toSymbolicName('XMLParser')       // 'xml-parser'
+mapper.toTypeName('name')                // 'Name'
+```
+
+**New Exports:**
+- `StoreTypeMapper` class from `domo-tactical` and `domo-tactical/store`
+
+#### Default Adapters Now Use StoreTypeMapper
+
+`DefaultTextEntryAdapter` and `DefaultTextStateAdapter` now automatically use `StoreTypeMapper` for bidirectional type name conversion:
+
+- **`toEntry()` / `toRawState()`**: Converts PascalCase type names to kebab-case symbolic names for storage
+- **`fromEntry()` / `fromRawState()`**: Converts kebab-case symbolic names back to PascalCase type names for adapter lookup and upcasting
+
+**Why This Matters:**
+- Entries stored in the journal now use consistent kebab-case type names (e.g., `user-registered` instead of `UserRegistered`)
+- States stored in the document store use kebab-case type names (e.g., `account-state` instead of `AccountState`)
+- Schema evolution logic receives the proper PascalCase type name for adapter lookup
+
+**Custom Adapters:**
+
+Custom adapters are NOT required to use `StoreTypeMapper`. However, if you want consistent naming with the default adapters, you can use it:
+
+```typescript
+class UserRegisteredAdapter extends DefaultTextEntryAdapter<UserRegistered> {
+  override toEntry(source: UserRegistered, streamVersion: number, metadata: Metadata): TextEntry {
+    // Map type name to symbolic name for storage (best practice)
+    const symbolicType = StoreTypeMapper.instance().toSymbolicName('UserRegistered')
+
+    return new TextEntry(
+      source.id(),
+      symbolicType,  // 'user-registered'
+      2,             // typeVersion
+      JSON.stringify({ ... }),
+      streamVersion,
+      JSON.stringify(metadata)
+    )
+  }
+}
+```
+
+### Changed
+
+#### State Constructor Simplified (Breaking Change for Custom Adapters)
+
+The `State` class (and subclasses `TextState`, `ObjectState`, `BinaryState`) constructor signature has been simplified to align with how `Entry` works:
+
+**Before:**
+```typescript
+new TextState(id, stateType: Function, typeVersion, data, dataVersion, metadata?, symbolicType?)
+```
+
+**After:**
+```typescript
+new TextState(id, type: string, typeVersion, data, dataVersion, metadata?)
+```
+
+**Key Changes:**
+- The `type` parameter is now a `string` instead of a `Function` (class constructor)
+- The `symbolicType` parameter has been removed - the adapter passes the type name directly
+- The `stateType` field has been removed from State (it was never used)
+
+**Migration:**
+If you have custom `StateAdapter` implementations, update `toRawState()` to pass a string type:
+
+```typescript
+// Before
+return new TextState(id, AccountState, 2, data, stateVersion, metadata, 'account-state')
+
+// After - pass type string directly (adapter decides the name)
+return new TextState(id, 'account-state', 2, data, stateVersion, metadata)
+```
+
+This change makes `State` consistent with `Entry`, where the adapter is fully responsible for deciding what type name to use (symbolic or concrete).
+
+#### InMemoryDocumentStore Now Uses StateAdapterProvider
+
+`InMemoryDocumentStore` now uses `StateAdapterProvider` for state serialization and deserialization, matching the pattern used by `InMemoryJournal` with `EntryAdapterProvider`.
+
+**Benefits:**
+- Consistent adapter pattern across Journal and DocumentStore
+- Enables custom state adapters with schema evolution
+- Uses `DefaultTextStateAdapter` as fallback when no custom adapter registered
+
+**Impact:**
+- No breaking changes - default behavior unchanged
+- Custom `StateAdapter` implementations are now applied during `read()` and `write()` operations
+
+#### Bank Example Updates
+
+The Bank example (`examples/bank/bank.ts`) now demonstrates `StoreTypeMapper` usage:
+
+```typescript
+function registerTypeMappings(): void {
+  const typeMapper = StoreTypeMapper.instance()
+
+  // Source/Entry type mappings (domain events → journal entries)
+  typeMapper
+    .mapping('AccountOpened', 'account-opened')
+    .mapping('FundsDeposited', 'funds-deposited')
+    .mapping('FundsWithdrawn', 'funds-withdrawn')
+    .mapping('FundsRefunded', 'funds-refunded')
+
+  // State type mappings (documents → document store)
+  typeMapper
+    .mapping('AccountSummary', 'account-summary')
+    .mapping('TransactionHistory', 'transaction-history')
+    .mapping('BankStatistics', 'bank-statistics')
+}
+```
+
+### Documentation
+
+- Added `StoreTypeMapper` section to `docs/DomoTactical.md`
+- Updated import documentation to include `StoreTypeMapper`
+- Added Bank example code showing type mapping registration
+- Added **Stream Evolution Patterns** section to `docs/DomoTactical.md`:
+  - Stream Branching (Splitting): Soft delete + replay, truncate + continue patterns
+  - Stream Merging (Joining): Replay to new stream, redirect pattern (no data movement)
+  - Best practices table for different scenarios
+  - Metadata for traceability examples
+
 ## [0.4.0] - 2026-02-03
 
 ### Added

@@ -522,6 +522,385 @@ if (!info.exists) {
 }
 ```
 
+#### **Stream Evolution Patterns**
+
+As domain models evolve, you may need to restructure how events are organized into streams. Two common patterns are **stream branching** (splitting one stream into multiple) and **stream merging** (combining multiple streams into one).
+
+##### Stream Branching (Splitting)
+
+Splitting occurs when a single aggregate needs to become multiple aggregates. For example, splitting a monolithic `Customer` stream into separate `CustomerProfile` and `CustomerBilling` streams.
+
+**Pattern 1: Soft Delete + Replay with Linking Events**
+
+```typescript
+// Information about each new stream created from the split
+interface SplitTarget {
+  streamName: string
+  eventCount: number      // How many events were replayed to this stream
+  firstVersion: number    // Starting version in new stream
+  lastVersion: number     // Ending version in new stream
+}
+
+// Domain event to mark the split point in the ORIGINAL stream
+class StreamSplit extends DomainEvent {
+  constructor(
+    public readonly sourceStreamName: string,
+    public readonly sourceStreamVersion: number,  // Version at which split occurred
+    public readonly targets: SplitTarget[],       // All new streams created
+    public readonly splitReason: string,
+    public readonly splitAt: Date = new Date()
+  ) { super() }
+  override id() { return this.sourceStreamName }
+}
+
+// Domain event to mark the origin in each NEW stream
+class StreamBranchedFrom extends DomainEvent {
+  constructor(
+    public readonly sourceStreamName: string,
+    public readonly sourceStreamVersion: number,  // Version of source at split time
+    public readonly branchName: string,           // This stream's role (e.g., 'profile', 'billing')
+    public readonly siblingStreams: string[],     // Other streams created in same split
+    public readonly branchedAt: Date = new Date()
+  ) { super() }
+  override id() { return this.sourceStreamName }
+}
+
+// 1. Read all events from the original stream
+const reader = await journal.streamReader('customer-reader')
+const stream = await reader.streamFor('customer-123')
+const splitVersion = stream.streamVersion
+
+// 2. Replay relevant events to new streams with complete linking metadata
+const profileEvents: Entry<string>[] = []
+const billingEvents: Entry<string>[] = []
+
+for (const entry of stream.entries) {
+  const event = entryAdapterProvider.asSource(entry)
+  if (isProfileEvent(event)) profileEvents.push(entry)
+  if (isBillingEvent(event)) billingEvents.push(entry)
+}
+
+// Replay to profile stream
+let profileVersion = 1
+for (const entry of profileEvents) {
+  const event = entryAdapterProvider.asSource(entry)
+  const linkingMetadata = Metadata.withProperties(new Map([
+    ['splitFrom', 'customer-123'],
+    ['splitFromVersion', String(splitVersion)],      // Source stream version at split
+    ['originalStreamVersion', String(entry.streamVersion)],
+    ['splitAt', new Date().toISOString()]
+  ]))
+  await journal.append('customer-profile-123', profileVersion++, event, linkingMetadata)
+}
+
+// Replay to billing stream
+let billingVersion = 1
+for (const entry of billingEvents) {
+  const event = entryAdapterProvider.asSource(entry)
+  const linkingMetadata = Metadata.withProperties(new Map([
+    ['splitFrom', 'customer-123'],
+    ['splitFromVersion', String(splitVersion)],
+    ['originalStreamVersion', String(entry.streamVersion)],
+    ['splitAt', new Date().toISOString()]
+  ]))
+  await journal.append('customer-billing-123', billingVersion++, event, linkingMetadata)
+}
+
+// 3. Append origin marker to each NEW stream (first event visible to new consumers)
+const profileOrigin = new StreamBranchedFrom(
+  'customer-123',
+  splitVersion,
+  'profile',
+  ['customer-billing-123']
+)
+await journal.append('customer-profile-123', profileVersion++, profileOrigin, Metadata.nullMetadata())
+
+const billingOrigin = new StreamBranchedFrom(
+  'customer-123',
+  splitVersion,
+  'billing',
+  ['customer-profile-123']
+)
+await journal.append('customer-billing-123', billingVersion++, billingOrigin, Metadata.nullMetadata())
+
+// 4. Append split marker to ORIGINAL stream (documents where events went)
+const splitMarker = new StreamSplit(
+  'customer-123',
+  splitVersion,
+  [
+    { streamName: 'customer-profile-123', eventCount: profileEvents.length, firstVersion: 1, lastVersion: profileVersion - 1 },
+    { streamName: 'customer-billing-123', eventCount: billingEvents.length, firstVersion: 1, lastVersion: billingVersion - 1 }
+  ],
+  'aggregate-decomposition'
+)
+await journal.append('customer-123', splitVersion + 1, splitMarker, Metadata.nullMetadata())
+
+// 5. Soft delete the original stream
+await journal.softDelete('customer-123')
+```
+
+**Pattern 2: Truncate + Continue with New Streams**
+
+Use this when you want the original stream to remain active but start fresh:
+
+```typescript
+// 1. Record current version
+const info = await journal.streamInfo('monolith-stream')
+const splitVersion = info.currentVersion
+
+// 2. Replay events to new streams with linking metadata (as above)
+
+// 3. Append split marker to original stream
+const splitMarker = new StreamSplit('monolith-stream', splitVersion, targets, 'decomposition')
+await journal.append('monolith-stream', splitVersion + 1, splitMarker, Metadata.nullMetadata())
+
+// 4. Truncate the original stream to hide old events
+// New reads only see the split marker and any future events
+await journal.truncateBefore('monolith-stream', splitVersion + 1)
+```
+
+##### Stream Merging (Joining)
+
+Merging combines multiple streams into one. For example, consolidating regional `Order-US`, `Order-EU` streams into a single global `Order` stream.
+
+**Pattern 1: Create New Stream + Soft Delete Originals**
+
+```typescript
+// Information about each source stream being merged
+interface MergeSource {
+  streamName: string
+  streamVersion: number   // Version at time of merge
+  eventCount: number      // Events contributed to merged stream
+  firstTargetVersion: number  // Where this stream's events start in merged stream
+  lastTargetVersion: number   // Where this stream's events end in merged stream
+}
+
+// Domain event to mark merge completion in the NEW stream
+class StreamMergedFrom extends DomainEvent {
+  constructor(
+    public readonly targetStreamName: string,
+    public readonly sources: MergeSource[],       // Complete info for all source streams
+    public readonly totalEventsMerged: number,
+    public readonly mergeReason: string,
+    public readonly mergedAt: Date = new Date()
+  ) { super() }
+  override id() { return this.targetStreamName }
+}
+
+// Domain event to mark deprecation in each OLD stream
+class StreamMergedInto extends DomainEvent {
+  constructor(
+    public readonly sourceStreamName: string,
+    public readonly sourceStreamVersion: number,  // This stream's version at merge
+    public readonly targetStreamName: string,
+    public readonly targetVersionRange: { first: number, last: number },  // Where events landed
+    public readonly otherSourceStreams: string[], // Other streams also merged
+    public readonly mergedAt: Date = new Date()
+  ) { super() }
+  override id() { return this.sourceStreamName }
+}
+
+// 1. Read all source streams and capture their versions
+const usStream = await reader.streamFor('order-us')
+const euStream = await reader.streamFor('order-eu')
+
+const sourceInfo = [
+  { stream: usStream, name: 'order-us' },
+  { stream: euStream, name: 'order-eu' }
+]
+
+// 2. Combine and sort events by timestamp
+const allEntries = [...usStream.entries, ...euStream.entries]
+  .map(entry => ({
+    entry,
+    streamName: entry.streamName || (usStream.entries.includes(entry) ? 'order-us' : 'order-eu'),
+    timestamp: JSON.parse(entry.entryData).dateTimeSourced
+  }))
+  .sort((a, b) => a.timestamp - b.timestamp)
+
+// 3. Replay to new merged stream, tracking where each source's events land
+const sourceTracking = new Map<string, { first: number, last: number, count: number }>()
+let version = 1
+
+for (const { entry, streamName } of allEntries) {
+  const event = entryAdapterProvider.asSource(entry)
+
+  // Track version range for this source stream
+  if (!sourceTracking.has(streamName)) {
+    sourceTracking.set(streamName, { first: version, last: version, count: 0 })
+  }
+  const tracking = sourceTracking.get(streamName)!
+  tracking.last = version
+  tracking.count++
+
+  const linkingMetadata = Metadata.withProperties(new Map([
+    ['mergedFrom', streamName],
+    ['mergedFromVersion', String(sourceInfo.find(s => s.name === streamName)!.stream.streamVersion)],
+    ['originalStreamVersion', String(entry.streamVersion)],
+    ['mergedAt', new Date().toISOString()]
+  ]))
+  await journal.append('order-global', version++, event, linkingMetadata)
+}
+
+// 4. Build complete source information
+const mergeSources: MergeSource[] = sourceInfo.map(({ stream, name }) => {
+  const tracking = sourceTracking.get(name)!
+  return {
+    streamName: name,
+    streamVersion: stream.streamVersion,
+    eventCount: tracking.count,
+    firstTargetVersion: tracking.first,
+    lastTargetVersion: tracking.last
+  }
+})
+
+// 5. Append merge marker to NEW stream
+const mergeMarker = new StreamMergedFrom(
+  'order-global',
+  mergeSources,
+  allEntries.length,
+  'regional-consolidation'
+)
+await journal.append('order-global', version++, mergeMarker, Metadata.nullMetadata())
+
+// 6. Append deprecation markers to EACH OLD stream
+for (const { stream, name } of sourceInfo) {
+  const tracking = sourceTracking.get(name)!
+  const otherSources = sourceInfo.filter(s => s.name !== name).map(s => s.name)
+
+  const deprecationMarker = new StreamMergedInto(
+    name,
+    stream.streamVersion,
+    'order-global',
+    { first: tracking.first, last: tracking.last },
+    otherSources
+  )
+  await journal.append(name, stream.streamVersion + 1, deprecationMarker, Metadata.nullMetadata())
+}
+
+// 7. Soft delete original streams
+await journal.softDelete('order-us')
+await journal.softDelete('order-eu')
+```
+
+**Pattern 2: Redirect Pattern (No Data Movement)**
+
+For high-volume streams where copying data is prohibitive, use redirect markers:
+
+```typescript
+// Domain event for stream redirection (enriched)
+class StreamRedirectedTo extends DomainEvent {
+  constructor(
+    public readonly sourceStreamName: string,
+    public readonly sourceStreamVersion: number,  // This stream's version at redirect
+    public readonly targetStreamName: string,
+    public readonly otherRedirectedStreams: string[],  // Other streams also redirecting
+    public readonly redirectReason: string,
+    public readonly effectiveAt: Date = new Date()
+  ) { super() }
+  override id() { return this.sourceStreamName }
+}
+
+// 1. Get current versions
+const usInfo = await journal.streamInfo('order-us')
+const euInfo = await journal.streamInfo('order-eu')
+
+// 2. Mark source streams as redirected with complete information
+const usRedirect = new StreamRedirectedTo(
+  'order-us',
+  usInfo.currentVersion,
+  'order-global',
+  ['order-eu'],
+  'regional-consolidation'
+)
+await journal.append('order-us', usInfo.currentVersion + 1, usRedirect, Metadata.nullMetadata())
+
+const euRedirect = new StreamRedirectedTo(
+  'order-eu',
+  euInfo.currentVersion,
+  'order-global',
+  ['order-us'],
+  'regional-consolidation'
+)
+await journal.append('order-eu', euInfo.currentVersion + 1, euRedirect, Metadata.nullMetadata())
+
+// 3. Soft delete source streams
+await journal.softDelete('order-us')
+await journal.softDelete('order-eu')
+
+// 4. Application code checks for redirects when loading
+async function loadOrderStream(streamName: string): Promise<EntityStream<string>> {
+  const stream = await reader.streamFor(streamName)
+
+  // Check for redirect marker
+  const lastEntry = stream.entries[stream.entries.length - 1]
+  if (lastEntry) {
+    const event = entryAdapterProvider.asSource(lastEntry)
+    if (event instanceof StreamRedirectedTo) {
+      return loadOrderStream(event.targetStreamName) // Follow redirect
+    }
+  }
+
+  return stream
+}
+```
+
+##### Best Practices for Stream Evolution
+
+| Scenario | Recommended Approach |
+|----------|---------------------|
+| Split aggregate into multiple | Soft delete original + replay to new streams |
+| Merge aggregates into one | Replay to new stream + soft delete originals |
+| Archive old events | `truncateBefore()` to hide, keep recent visible |
+| Permanent removal (GDPR) | `tombstone()` for hard delete |
+| Temporary deactivation | `softDelete()` + reopen later by appending |
+| High-volume merge | Redirect pattern (no data movement) |
+
+##### Complete Provenance Information
+
+**For Splits - Marker Events:**
+
+| Location | Event | Key Fields |
+|----------|-------|------------|
+| Original stream | `StreamSplit` | `sourceStreamVersion`, `targets[]` with stream names and version ranges |
+| Each new stream | `StreamBranchedFrom` | `sourceStreamName`, `sourceStreamVersion`, `siblingStreams[]` |
+
+**For Splits - Linking Metadata (on each replayed event):**
+
+```typescript
+Metadata.withProperties(new Map([
+  ['splitFrom', 'original-stream-name'],
+  ['splitFromVersion', String(splitVersion)],       // Source stream version at split
+  ['originalStreamVersion', String(entry.streamVersion)],  // Event's original version
+  ['splitAt', new Date().toISOString()]
+]))
+```
+
+**For Merges - Marker Events:**
+
+| Location | Event | Key Fields |
+|----------|-------|------------|
+| New merged stream | `StreamMergedFrom` | `sources[]` with stream names, versions, and target version ranges |
+| Each old stream | `StreamMergedInto` | `sourceStreamVersion`, `targetStreamName`, `targetVersionRange`, `otherSourceStreams[]` |
+
+**For Merges - Linking Metadata (on each replayed event):**
+
+```typescript
+Metadata.withProperties(new Map([
+  ['mergedFrom', 'source-stream-name'],
+  ['mergedFromVersion', String(sourceStreamVersion)],  // Source stream version at merge
+  ['originalStreamVersion', String(entry.streamVersion)],
+  ['mergedAt', new Date().toISOString()]
+]))
+```
+
+This complete provenance information enables:
+- **Forward navigation**: From old stream, find where events went
+- **Backward navigation**: From new stream, find where events came from
+- **Sibling discovery**: Find all streams involved in the same split/merge
+- **Point-in-time recovery**: Know exact versions at evolution time if stream is reopened
+- **Audit compliance**: Full traceability for regulatory requirements
+
 #### **Optimistic Concurrency with StreamState**
 
 Use `StreamState` enum values for optimistic concurrency control:
@@ -732,27 +1111,51 @@ Custom serialization for schema evolution and versioning.
 - Version-specific serialization
 - Schema migration support
 - Custom JSON handling
-- Default text-based adapter
+- Default text-based adapter with automatic type name mapping
+
+**Default Adapter Behavior:**
+
+`DefaultTextEntryAdapter` automatically uses `StoreTypeMapper` for bidirectional type name conversion:
+
+- **`toEntry()`**: Converts PascalCase type names to kebab-case symbolic names (e.g., `UserRegistered` → `user-registered`)
+- **`fromEntry()`**: Converts kebab-case back to PascalCase for adapter lookup and upcasting
+
+This means entries stored in the journal use consistent kebab-case type names.
+
+**Custom Adapter Example:**
+
+Custom adapters can use `StoreTypeMapper` for consistent naming (recommended), or use their own naming scheme:
 
 ```typescript
-// Define custom adapter
-class UserRegisteredAdapter implements EntryAdapter<UserRegistered, string> {
-  toEntry(source: UserRegistered, metadata: Metadata): Entry<string> {
-    return {
-      type: 'UserRegistered',
-      typeVersion: source.sourceTypeVersion,
-      entryData: JSON.stringify({
+import { DefaultTextEntryAdapter, StoreTypeMapper, Metadata, TextEntry } from 'domo-tactical'
+
+// Custom adapter with StoreTypeMapper (recommended for consistency)
+class UserRegisteredAdapter extends DefaultTextEntryAdapter<UserRegistered> {
+  override toEntry(source: UserRegistered, streamVersion: number, metadata: Metadata): TextEntry {
+    // Map type name to symbolic name for storage (best practice)
+    const symbolicType = StoreTypeMapper.instance().toSymbolicName('UserRegistered')
+
+    return new TextEntry(
+      source.id(),
+      symbolicType,  // 'user-registered'
+      2,             // typeVersion
+      JSON.stringify({
         userId: source.userId,
         username: source.username,
         email: source.email
       }),
-      metadata: JSON.stringify(metadata)
-    }
+      streamVersion,
+      JSON.stringify(metadata)
+    )
   }
 
-  fromEntry(entry: Entry<string>): UserRegistered {
-    const data = JSON.parse(entry.entryData as string)
-    return new UserRegistered(data.userId, data.username, data.email)
+  protected override upcastIfNeeded(data: any, type: string, typeVersion: number): UserRegistered {
+    // type is the PascalCase type name (converted by fromEntry)
+    if (typeVersion === 2) {
+      return new UserRegistered(data.userId, data.username, data.email)
+    }
+    // Upcast from v1
+    return new UserRegistered(data.userId, data.username, `${data.username}@legacy.com`)
   }
 }
 
@@ -1001,15 +1404,20 @@ beforeEach(() => {
 For custom serialization or schema evolution, implement `StateAdapter<S, RS>`:
 
 ```typescript
-import { StateAdapter, TextState, Metadata } from 'domo-tactical'
+import { StateAdapter, TextState, Metadata, StoreTypeMapper } from 'domo-tactical'
 
 class AccountStateAdapter implements StateAdapter<AccountState, TextState> {
+  typeVersion(): number { return 2 }
+
   toRawState(id: string, state: AccountState, stateVersion: number, metadata: Metadata): TextState {
-    return new TextState(id, JSON.stringify({
+    const data = JSON.stringify({
       accountId: state.accountId,
       balance: state.balance,
       status: state.status
-    }), stateVersion, metadata, 'AccountState', 1)
+    })
+    // Map type name to symbolic name for storage (best practice)
+    const symbolicType = StoreTypeMapper.instance().toSymbolicName('AccountState')
+    return new TextState(id, symbolicType, this.typeVersion(), data, stateVersion, metadata)
   }
 
   fromRawState(raw: TextState): AccountState {
@@ -1024,6 +1432,110 @@ class AccountStateAdapter implements StateAdapter<AccountState, TextState> {
 
 // Register the adapter
 StateAdapterProvider.instance().registerAdapter('AccountState', new AccountStateAdapter())
+```
+
+#### **StoreTypeMapper - Storage Type Name Mapping**
+
+`StoreTypeMapper` provides bidirectional mapping between type/class names and symbolic storage names. This enables storage abstraction and protects against class renaming.
+
+**Key Features:**
+- Single registration creates bidirectional mapping (type ↔ symbolic)
+- Convention-based fallback (PascalCase ↔ kebab-case)
+- Works for both Entry types (events/commands) and State types (documents)
+- Fluent API for chaining registrations
+- **Used automatically by `DefaultTextEntryAdapter` and `DefaultTextStateAdapter`**
+
+**Automatic Usage in Default Adapters:**
+
+The default adapters use `StoreTypeMapper` internally:
+- `DefaultTextEntryAdapter.toEntry()` → calls `toSymbolicName()` to convert type names for storage
+- `DefaultTextEntryAdapter.fromEntry()` → calls `toTypeName()` for adapter lookup and upcasting
+- `DefaultTextStateAdapter.toRawState()` → calls `toSymbolicName()` for document type names
+
+Custom adapters are NOT required to use `StoreTypeMapper`, but can do so for consistent naming.
+
+**Basic Usage:**
+
+```typescript
+import { StoreTypeMapper } from 'domo-tactical'
+
+const mapper = StoreTypeMapper.instance()
+
+// Register explicit bidirectional mappings
+mapper
+  .mapping('AccountOpened', 'account-opened')
+  .mapping('FundsDeposited', 'funds-deposited')
+  .mapping('AccountSummary', 'account-summary')
+
+// Convert type name to symbolic name (for writing)
+mapper.toSymbolicName('AccountOpened')  // 'account-opened'
+
+// Convert symbolic name to type name (for reading)
+mapper.toTypeName('account-opened')     // 'AccountOpened'
+
+// Check if explicit mapping exists
+mapper.hasTypeMapping('AccountOpened')     // true
+mapper.hasSymbolicMapping('account-opened') // true
+```
+
+**Convention-Based Fallback:**
+
+When no explicit mapping is registered, StoreTypeMapper uses convention-based conversion:
+
+```typescript
+// No registration needed - automatic conversion
+mapper.toSymbolicName('UserRegistered')    // 'user-registered'
+mapper.toTypeName('user-registered')       // 'UserRegistered'
+
+// Handles acronyms
+mapper.toSymbolicName('XMLParser')         // 'xml-parser'
+mapper.toTypeName('xml-parser')            // 'XmlParser'
+
+// Single words
+mapper.toSymbolicName('Name')              // 'name'
+mapper.toTypeName('name')                  // 'Name'
+```
+
+**Why Use Explicit Mappings:**
+
+While convention-based conversion works automatically, explicit mappings provide:
+
+1. **Documentation** - The storage schema is explicitly documented in code
+2. **Refactoring Protection** - Class can be renamed without breaking stored data
+3. **Custom Naming** - Use any symbolic name you prefer:
+   ```typescript
+   mapper.mapping('AccountOpened', 'acct-open')  // Custom symbolic name
+   ```
+
+**Complete Bank Example:**
+
+```typescript
+import { StoreTypeMapper } from 'domo-tactical'
+
+function registerTypeMappings(): void {
+  const typeMapper = StoreTypeMapper.instance()
+
+  // Source/Entry type mappings (domain events → journal entries)
+  typeMapper
+    .mapping('AccountOpened', 'account-opened')
+    .mapping('FundsDeposited', 'funds-deposited')
+    .mapping('FundsWithdrawn', 'funds-withdrawn')
+    .mapping('FundsRefunded', 'funds-refunded')
+
+  // State type mappings (documents → document store)
+  typeMapper
+    .mapping('AccountSummary', 'account-summary')
+    .mapping('TransactionHistory', 'transaction-history')
+    .mapping('BankStatistics', 'bank-statistics')
+}
+```
+
+**Test Isolation:**
+
+```typescript
+beforeEach(() => {
+  StoreTypeMapper.reset()  // Clear all registered mappings
+})
 ```
 
 ### Document Store Components (`/src/store/document/`)
@@ -1437,7 +1949,7 @@ import {
   BinaryState, TextState, ObjectState,
   EntryAdapter, EntryAdapterProvider,
   StateAdapter, StateAdapterProvider,
-  EntryRegistry, ContextProfile,
+  EntryRegistry, ContextProfile, StoreTypeMapper,
 
   // Journal types
   Journal, AppendResult, Entry, EntityStream, Outcome,
@@ -1471,7 +1983,7 @@ import {
   BinaryState, TextState, ObjectState,
   EntryAdapter, EntryAdapterProvider,
   StateAdapter, StateAdapterProvider,
-  EntryRegistry, ContextProfile
+  EntryRegistry, ContextProfile, StoreTypeMapper
 } from 'domo-tactical/store'
 ```
 
