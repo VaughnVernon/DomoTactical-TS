@@ -134,12 +134,12 @@ export class DefaultTextStateAdapter<S> implements StateAdapter<S, TextState> {
       const metadata = metadataOrUndefined || Metadata.nullMetadata()
 
       const serialized = JSON.stringify(state)
-      const stateType = state?.constructor ?? Object
+      const typeName = state?.constructor?.name ?? 'Object'
 
       // Map type name to symbolic name for storage
-      const symbolicType = StoreTypeMapper.instance().toSymbolicName(stateType.name)
+      const symbolicType = StoreTypeMapper.instance().toSymbolicName(typeName)
 
-      return new TextState(id, stateType, this.version, serialized, stateVersion, metadata, symbolicType)
+      return new TextState(id, symbolicType, this.version, serialized, stateVersion, metadata)
     }
 
     // This is the 3-arg overload (state, stateVersion, metadata)
@@ -151,12 +151,12 @@ export class DefaultTextStateAdapter<S> implements StateAdapter<S, TextState> {
         : Metadata.nullMetadata()
 
     const serialized = JSON.stringify(state)
-    const stateType = state?.constructor ?? Object
+    const typeName = state?.constructor?.name ?? 'Object'
 
     // Map type name to symbolic name for storage
-    const symbolicType = StoreTypeMapper.instance().toSymbolicName(stateType.name)
+    const symbolicType = StoreTypeMapper.instance().toSymbolicName(typeName)
 
-    return new TextState('', stateType, this.version, serialized, stateVersion, metadata, symbolicType)
+    return new TextState('', symbolicType, this.version, serialized, stateVersion, metadata)
   }
 
   /**
