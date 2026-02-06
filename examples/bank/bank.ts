@@ -17,7 +17,7 @@ import { TellerActor } from './model/TellerActor'
 import { BankSupervisor } from './model/supervisors/BankSupervisor'
 import { AccountSupervisor } from './model/supervisors/AccountSupervisor'
 import { TransferSupervisor } from './model/supervisors/TransferSupervisor'
-import { EntryAdapterProvider } from 'domo-tactical/store'
+import { EntryAdapterProvider, StoreTypeMapper } from 'domo-tactical/store'
 import {
   AccountOpenedAdapter,
   FundsDepositedAdapter,
@@ -306,6 +306,36 @@ function setupPersistenceInfrastructure(): {
 }
 
 /**
+ * Register type mappings for symbolic storage names.
+ * Maps Source type names to symbolic names for Journal entries,
+ * and State type names to symbolic names for DocumentStore documents.
+ *
+ * Although not strictly required (convention-based conversion is automatic),
+ * explicit mappings provide:
+ * - Documentation of the storage schema
+ * - Protection against class renaming
+ * - Custom naming conventions if desired
+ */
+function registerTypeMappings(): void {
+  const typeMapper = StoreTypeMapper.instance()
+
+  // Source/Entry type mappings (domain events → journal entries)
+  typeMapper
+    .mapping('AccountOpened', 'account-opened')
+    .mapping('FundsDeposited', 'funds-deposited')
+    .mapping('FundsWithdrawn', 'funds-withdrawn')
+    .mapping('FundsRefunded', 'funds-refunded')
+
+  // State type mappings (documents → document store)
+  typeMapper
+    .mapping('AccountSummary', 'account-summary')
+    .mapping('TransactionHistory', 'transaction-history')
+    .mapping('BankStatistics', 'bank-statistics')
+
+  console.log('✅ Registered type mappings for storage abstraction')
+}
+
+/**
  * Register custom entry adapters for domain events.
  * Enables schema evolution and custom serialization.
  */
@@ -554,6 +584,7 @@ function printExampleFeatures(): void {
   console.log('  • Event Sourcing with EventSourcedEntity')
   console.log('  • Shared InMemoryJournal for all event-sourced entities')
   console.log('  • Domain events: AccountOpened, FundsDeposited, FundsWithdrawn, etc.')
+  console.log('  • StoreTypeMapper for symbolic storage names')
   console.log('  • Parent-child actor hierarchies')
   console.log('  • Self-messaging for state changes')
   console.log('  • Realistic multi-step transfers with retry logic')
@@ -648,6 +679,7 @@ async function cleanup(infra: BankInfrastructure): Promise<void> {
 async function main(): Promise<void> {
   // 1. Setup infrastructure
   const { journal, documentStore } = setupPersistenceInfrastructure()
+  registerTypeMappings()
   registerEntryAdapters()
 
   // 2. Setup actor supervision hierarchy
