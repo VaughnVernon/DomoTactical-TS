@@ -1,4 +1,6 @@
 # DomoTactical-TS
+![DomoTactical Logo](./docs/domo-tactical-logo.png)
+
 Domo tactical domain modeling tools for TypeScript using DomoActors-TS.
 
 [![License: RPL-1.5](https://img.shields.io/badge/License-RPL--1.5-blue.svg)](https://opensource.org/license/rpl-1-5)
